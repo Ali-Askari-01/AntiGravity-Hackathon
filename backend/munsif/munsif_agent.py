@@ -1,13 +1,11 @@
 from fastapi import HTTPException
-from typing import List, Optional, Dict, Any
+from typing import Dict, Any
 import uuid
 from backend.zuban.zuban_agent import ZubanAgent
 
 class MunsifAgent:
     def __init__(self):
         self.zuban = ZubanAgent()
-        # For now we use in-memory dictionary. 
-        # Future: Use SQLite Session model from backend.models
         self.sessions: Dict[str, Dict[str, Any]] = {}
 
     def create_session(self) -> str:
@@ -23,32 +21,42 @@ class MunsifAgent:
     def process_input(self, session_id: str, raw_input: str) -> Dict[str, Any]:
         if session_id not in self.sessions:
             raise HTTPException(status_code=404, detail="Session not found")
-        
+
         session = self.sessions[session_id]
-        
-        # 1. Call Zuban Agent
+
+        # Step 1: Call Zuban to parse intent
         session["workplan"].append({"agent": "Munsif", "action": "Calling Zuban", "status": "started"})
-        intent_res = self.zuban.parse_input(raw_input)
-        
+        try:
+            intent_res = self.zuban.parse_input(raw_input)
+        except ValueError as e:
+            # Zuban returned the user-facing error after 2 retries
+            session["workplan"].append({"agent": "Zuban", "action": "Failed to parse intent", "error": str(e)})
+            session["status"] = "failed"
+            return {
+                "message": str(e),  # "Dobara likhein — request samajh nahi aayi."
+                "session_state": session
+            }
+
         session["workplan"].append({
-            "agent": "Zuban", 
-            "action": "Parsed Intent", 
+            "agent": "Zuban",
+            "action": "Parsed Intent",
             "result": intent_res.model_dump()
         })
         session["context"]["intent"] = intent_res.model_dump()
 
-        # Handle low confidence fallback
-        if intent_res.confidence_score < 0.75:
-            session["workplan"].append({"agent": "Munsif", "action": "Triggered fallback: Ask user", "reason": "Low confidence"})
-            return {
-                "message": intent_res.clarifying_question,
-                "session_state": session
-            }
+        # Step 2: Route to Khoji with extracted fields
+        session["workplan"].append({
+            "agent": "Munsif",
+            "action": "Routing to Khoji",
+            "service_type": intent_res.service_type,
+            "location": intent_res.location,
+            "urgency": intent_res.urgency,
+            "status": "pending"
+        })
 
-        # Proceed to Khoji
-        session["workplan"].append({"agent": "Munsif", "action": "Routing to Khoji", "status": "pending"})
-        
         return {
-            "message": "Intent understood. Proceeding to matching provider.",
+            "message": f"Samajh gaya! '{intent_res.service_label}' ki talash {intent_res.location} mein ho rahi hai.",
+            "intent": intent_res.model_dump(),
+            "next_step": "khoji_search",
             "session_state": session
         }
