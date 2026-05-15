@@ -21,8 +21,8 @@ PROVIDERS = [
         "skills": ["ac_technician"],
         "location": "G-13",
         "lat": 33.6938, "lng": 72.9797,
-        "rating": 4.8, "experience": 9,
-        "base_price": 1500.0, "workload": 1, "is_available": True,
+        "rating": 4.8, "experience": 8,
+        "base_price": 1200.0, "workload": 1, "is_available": True,
     },
     {
         "name": "Khan Cooling Co",

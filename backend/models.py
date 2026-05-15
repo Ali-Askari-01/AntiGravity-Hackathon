@@ -47,3 +47,25 @@ class Schedule(Base):
     slot_start = Column(String) # ISO format
     slot_end = Column(String)   # ISO format
     status = Column(String)     # occupied, available
+
+class Feedback(Base):
+    __tablename__ = "feedback"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    booking_id = Column(Integer, index=True)
+    provider_id = Column(Integer, index=True)
+    rating = Column(Float)
+    arrived_on_time = Column(Boolean)
+    work_quality = Column(Boolean)
+    cleanliness = Column(Boolean)
+    comment = Column(String)
+
+class Dispute(Base):
+    __tablename__ = "disputes"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    booking_id = Column(Integer, index=True)
+    issue_type = Column(String) # no_show, overcharge, poor_quality, damage
+    description = Column(String)
+    resolution = Column(String)
+    status = Column(String, default="pending") # pending, resolved

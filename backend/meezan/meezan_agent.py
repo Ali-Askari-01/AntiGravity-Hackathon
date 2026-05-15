@@ -2,12 +2,16 @@ import random
 import uuid
 import datetime
 from sqlalchemy.orm import Session
-from backend.models import Provider, Booking
 from backend.jadwal.jadwal_agent import JadwalAgent
+from backend.qeemat.qeemat_agent import QeematAgent
+from backend.insaf.insaf_agent import InsafAgent
+from backend.models import Provider, Booking, Feedback
 
 class MeezanAgent:
     def __init__(self):
         self.jadwal = JadwalAgent()
+        self.qeemat = QeematAgent()
+        self.insaf = InsafAgent()
 
     def create_booking(
         self, 
@@ -48,21 +52,23 @@ class MeezanAgent:
         # 3. Generate confirmation code (XIDMAT-XXXX)
         conf_code = f"XIDMAT-{random.randint(1000, 9999)}"
 
-        # 3. Dynamic Pricing Logic (Simplified for Meezan)
-        base_price = provider.base_price
-        urgency_charge = 500 if urgency in ("urgent", "emergency") else 0
-        distance_charge = round(distance_km * 50, 0) # 50 PKR per km
-        peak_charge = 200 # Assume peak for demo
-        quality_charge = 300 # Standard quality assurance fee
-        tax = 0
+        # 3. Dynamic Pricing Logic (Using Qeemat Agent)
+        try:
+            appt_time = datetime.datetime.fromisoformat(slot_iso)
+        except:
+            appt_time = datetime.datetime.now()
 
-        final_price = base_price + urgency_charge + distance_charge + peak_charge + quality_charge + tax
-        
-        price_breakdown = (
-            f"Base {base_price} + Urgency {urgency_charge} + "
-            f"Distance {distance_charge} + Peak {peak_charge} + "
-            f"Quality {quality_charge} + Tax {tax}"
+        pricing = self.qeemat.calculate_price(
+            base_rate=provider.base_price,
+            urgency=urgency,
+            distance_km=distance_km,
+            appointment_time=appt_time,
+            provider_rating=provider.rating or 5.0,
+            experience_years=provider.experience or 1
         )
+        
+        final_price = pricing['final_price']
+        price_breakdown = pricing['trace_log']
 
         # 4. Calculate reminder time (1 hour before)
         # For demo, we just manipulate the string if possible, or just return a mock string
@@ -92,6 +98,7 @@ class MeezanAgent:
 
         # 7. Return full receipt
         return {
+            "booking_id": booking.id,
             "confirmation_code": conf_code,
             "provider_name": provider.name,
             "provider_phone": provider.phone or "N/A",
@@ -105,3 +112,41 @@ class MeezanAgent:
             "reminder_at": reminder_at,
             "status": "CONFIRMED"
         }
+
+    def update_booking_status(self, db: Session, booking_id: int, new_status: str) -> dict:
+        booking = db.query(Booking).filter(Booking.id == booking_id).first()
+        if not booking:
+            raise ValueError("Booking not found")
+        
+        booking.status = new_status
+        db.commit()
+        return {"status": "updated", "new_status": new_status}
+
+    def submit_feedback(self, db: Session, booking_id: int, rating: float, 
+                        on_time: bool, quality: bool, cleanliness: bool, comment: str) -> dict:
+        booking = db.query(Booking).filter(Booking.id == booking_id).first()
+        if not booking:
+            raise ValueError("Booking not found")
+
+        feedback = Feedback(
+            booking_id=booking_id,
+            provider_id=booking.provider_id,
+            rating=rating,
+            arrived_on_time=on_time,
+            work_quality=quality,
+            cleanliness=cleanliness,
+            comment=comment
+        )
+        db.add(feedback)
+        db.commit()
+
+        # Trigger rating recalculation via InsafAgent's utility method
+        self.insaf.update_provider_rating(db, booking.provider_id)
+        
+        booking.status = "COMPLETED"
+        db.commit()
+
+        return {"status": "feedback_received", "booking_id": booking_id}
+    
+    def raise_dispute(self, db: Session, booking_id: int, issue_type: str, description: str) -> dict:
+        return self.insaf.handle_dispute(db, booking_id, issue_type, description)

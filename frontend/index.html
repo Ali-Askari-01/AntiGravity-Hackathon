@@ -8,7 +8,7 @@
     <!-- Google Fonts: Outfit -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@400;600&display=swap" rel="stylesheet">
     
     <!-- Phosphor Icons -->
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
@@ -61,75 +61,46 @@
 
     <!-- ==================== HOME DASHBOARD ==================== -->
     <section id="home-screen" class="view has-bottom-nav">
-        <header class="home-header">
-            <div class="user-info">
-                <img src="https://ui-avatars.com/api/?name=Ali+Askari&background=0A5C36&color=fff" alt="User" class="avatar">
-                <div>
-                    <p class="greeting">Hello, Ali 👋</p>
-                    <p class="location"><i class="ph ph-map-pin"></i> DHA Phase 6, Lahore</p>
-                </div>
-            </div>
-            <button class="icon-btn"><i class="ph ph-bell"></i></button>
+        <header class="app-header">
+            <h1 class="app-title">Antigravity</h1>
+            <button class="icon-btn"><i class="ph ph-user"></i></button>
         </header>
 
-        <main class="home-main">
-            <!-- Active Booking Hero -->
-            <div class="hero-card glass-card">
-                <div class="hero-header">
-                    <span class="badge badge-warning">En-route</span>
-                    <span class="time">10 mins away</span>
+        <main class="home-container">
+            <div class="request-box glass-card">
+                <div class="input-header">
+                    <span>What do you need help with?</span>
+                    <span id="lang-badge" class="badge-lang">English</span>
                 </div>
-                <div class="hero-body">
-                    <div class="provider-info">
-                        <h3>Plumbing Repair</h3>
-                        <p>Zaid Ahmed</p>
-                    </div>
-                    <div class="icon-circle pulse-warning">
-                        <i class="ph ph-wrench"></i>
-                    </div>
-                </div>
-                <div class="hero-footer">
-                    <div class="progress-track">
-                        <div class="progress-fill" style="width: 70%;"></div>
-                    </div>
-                    <p>Arriving at 02:45 PM</p>
-                </div>
+                <textarea id="home-request-input" placeholder="e.g. Mere AC se pani tapak raha hai..." oninput="app.onInput(this)"></textarea>
             </div>
 
-            <!-- Services Row -->
-            <h3 class="section-title">Quick Services</h3>
-            <div class="services-row">
-                <div class="service-card ripple">
-                    <div class="icon-wrap bg-blue"><i class="ph ph-drop"></i></div>
-                    <span>Plumbing</span>
-                </div>
-                <div class="service-card ripple">
-                    <div class="icon-wrap bg-yellow"><i class="ph ph-lightning"></i></div>
-                    <span>Electrical</span>
-                </div>
-                <div class="service-card ripple">
-                    <div class="icon-wrap bg-green"><i class="ph ph-broom"></i></div>
-                    <span>Cleaning</span>
-                </div>
-                <div class="service-card ripple">
-                    <div class="icon-wrap bg-purple"><i class="ph ph-hammer"></i></div>
-                    <span>Carpenter</span>
+            <div class="chips-container">
+                <div class="chip" onclick="app.fillInput('Plumber for leaky pipe')">🔧 Leaky Pipe</div>
+                <div class="chip" onclick="app.fillInput('AC not cooling enough')">❄️ AC Service</div>
+                <div class="chip" onclick="app.fillInput('Clean my 3-bedroom house')">🧹 Deep Cleaning</div>
+                <div class="chip" onclick="app.fillInput('Fix short circuit in lounge')">⚡ Electrical</div>
+            </div>
+
+            <div class="promotion-carousel mt-4">
+                <div class="promo-card bg-primary">
+                    <div class="promo-content">
+                        <h3>Flat 20% Off</h3>
+                        <p>On your first AC service this season.</p>
+                    </div>
+                    <i class="ph-fill ph-snowflake promo-icon"></i>
                 </div>
             </div>
             
-            <!-- Bookings List -->
-            <h3 class="section-title mt-4">Recent Bookings</h3>
+            <h3 class="section-title mt-4">Your Recent Services</h3>
             <div class="booking-list">
-                <div class="list-item glass-card">
-                    <div class="item-icon"><i class="ph ph-check-circle text-green"></i></div>
-                    <div class="item-details">
-                        <h4>AC Service</h4>
-                        <p>Completed • 12 May</p>
-                    </div>
-                    <div class="item-price">Rs 1,500</div>
-                </div>
+                <!-- Recent items -->
             </div>
         </main>
+        
+        <div class="pinned-cta">
+            <button class="btn-primary ripple h-56" onclick="app.processRequest()">Find Service</button>
+        </div>
     </section>
 
     <!-- ==================== CHAT INTERFACE ==================== -->
@@ -173,6 +144,182 @@
             </div>
             <button class="send-btn ripple" onclick="app.sendMessage()"><i class="ph-fill ph-paper-plane-right"></i></button>
         </footer>
+    </section>
+
+    <!-- ==================== BOOKING CONFIRMATION SCREEN ==================== -->
+    <section id="confirmation-screen" class="view">
+        <header class="confirmation-header">
+            <button class="icon-btn" onclick="app.navigate('home-screen')"><i class="ph ph-x"></i></button>
+        </header>
+        
+        <div class="confirmation-content text-center">
+            <div class="success-check pulse-anim">
+                <i class="ph-fill ph-check-circle"></i>
+            </div>
+            <p class="mt-2">Booking Confirmed!</p>
+            <h1 id="conf-code" class="conf-code-text">XIDMAT-2847</h1>
+            
+            <div class="provider-card glass-card mt-4">
+                <div class="provider-row">
+                    <img src="https://ui-avatars.com/api/?name=Ali+AC&background=1A56DB&color=fff" alt="Provider" class="avatar">
+                    <div class="provider-details">
+                        <h4>Ali AC Services</h4>
+                        <p><i class="ph-fill ph-star text-yellow"></i> 4.8 • 2.1 km away</p>
+                    </div>
+                    <button class="call-btn-sm"><i class="ph ph-phone"></i></button>
+                </div>
+                <div class="booking-meta mt-2">
+                    <p><i class="ph ph-calendar"></i> Tomorrow, 10:00 AM</p>
+                    <p><i class="ph ph-map-pin"></i> House 42, Street 1, G-13, Islamabad</p>
+                </div>
+            </div>
+
+            <div class="price-breakdown-card mt-4">
+                <h3>Price Breakdown</h3>
+                <div class="breakdown-list">
+                    <div class="breakdown-row"><span>Base Rate</span><span>PKR 1,200</span></div>
+                    <div class="breakdown-row"><span>Urgency Premium</span><span>PKR 0</span></div>
+                    <div class="breakdown-row"><span>Distance Charge</span><span>PKR 42</span></div>
+                    <div class="breakdown-row"><span>Peak Hour Factor</span><span>x1.0</span></div>
+                    <div class="breakdown-row"><span>Quality Premium</span><span>PKR 60</span></div>
+                    <div class="breakdown-row"><span>Experience Factor</span><span>PKR 120</span></div>
+                    <div class="breakdown-row border-top"><span><strong>Total Price</strong></span><span><strong>PKR 1,438</strong></span></div>
+                </div>
+            </div>
+
+            <div class="confirmation-actions mt-4">
+                <button class="btn-primary" onclick="app.navigate('tracking-screen')">Track Provider</button>
+                <button class="btn-text" onclick="app.navigate('home-screen')">Book Another Service</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- ==================== TRACKING SCREEN (EN-ROUTE) ==================== -->
+    <section id="tracking-screen" class="view">
+        <header class="tracking-header">
+            <button class="icon-btn" onclick="app.navigate('home-screen')"><i class="ph ph-arrow-left"></i></button>
+            <h3>Service Tracking</h3>
+        </header>
+        <div class="tracking-map">
+            <img src="https://api.dicebear.com/7.x/identicon/svg?seed=map" alt="Map" class="map-placeholder">
+            <div class="provider-marker pulse-anim">
+                <i class="ph-fill ph-bicycle"></i>
+            </div>
+        </div>
+        <div class="tracking-info-card slide-up-anim">
+            <div class="provider-strip">
+                <img src="https://ui-avatars.com/api/?name=Ali+AC&background=0A5C36&color=fff" alt="Provider" class="avatar">
+                <div class="provider-meta">
+                    <h4>Ali AC Services</h4>
+                    <p><i class="ph-fill ph-star text-yellow"></i> 4.8 • AC Technician</p>
+                </div>
+                <button class="call-btn"><i class="ph-fill ph-phone"></i></button>
+            </div>
+            <div class="status-timeline">
+                <div class="timeline-item active">
+                    <div class="dot"></div>
+                    <div class="label">Confirmed</div>
+                </div>
+                <div class="timeline-item active">
+                    <div class="dot pulse-anim"></div>
+                    <div class="label">En-route</div>
+                </div>
+                <div class="timeline-item">
+                    <div class="dot"></div>
+                    <div class="label">Arrival</div>
+                </div>
+            </div>
+            <div class="arrival-est">
+                <p>Estimated Arrival</p>
+                <h2>10 Minutes</h2>
+            </div>
+            <p class="status-msg">Ustad is on the way to your location in G-13.</p>
+        </div>
+    </section>
+
+    <!-- ==================== COMPLETION & FEEDBACK SCREEN ==================== -->
+    <section id="feedback-screen" class="view">
+        <div class="feedback-container fade-up-anim">
+            <div class="success-icon pulse-anim">
+                <i class="ph-fill ph-check-circle"></i>
+            </div>
+            <h2>Service Completed!</h2>
+            <p>Aapki service kamyabi se mukammal ho gayi hai.</p>
+            
+            <div class="final-invoice glass-card">
+                <div class="invoice-row"><span>Final Price:</span><strong>PKR 1,438</strong></div>
+                <div class="invoice-row"><span>Payment:</span><strong>Cash</strong></div>
+            </div>
+
+            <h3 class="mt-4">How was the service?</h3>
+            <div class="star-rating">
+                <i class="ph ph-star" data-value="1"></i>
+                <i class="ph ph-star" data-value="2"></i>
+                <i class="ph ph-star" data-value="3"></i>
+                <i class="ph ph-star" data-value="4"></i>
+                <i class="ph ph-star" data-value="5"></i>
+            </div>
+
+            <div class="quality-checks mt-4">
+                <div class="check-item">
+                    <span>Arrived on time?</span>
+                    <input type="checkbox" id="check-time">
+                </div>
+                <div class="check-item">
+                    <span>Quality of work?</span>
+                    <input type="checkbox" id="check-quality" checked>
+                </div>
+                <div class="check-item">
+                    <span>Cleanliness?</span>
+                    <input type="checkbox" id="check-clean" checked>
+                </div>
+            </div>
+
+            <textarea placeholder="Any comments? (Optional)" id="feedback-comment"></textarea>
+            
+            <button class="btn-primary ripple mt-4" onclick="app.submitFeedback()">Submit Review</button>
+            <button class="btn-text mt-2" onclick="app.showDisputeModal()">Raise a Dispute</button>
+        </div>
+    </section>
+
+    <!-- ==================== DISPUTE MODAL ==================== -->
+    <div id="dispute-modal" class="modal">
+        <div class="modal-content slide-up-anim">
+            <h3>Report an Issue</h3>
+            <p>Humain batayen ke kya masla pesh aya.</p>
+            
+            <select id="dispute-type">
+                <option value="poor_quality">Poor Quality</option>
+                <option value="no_show">Provider No-show</option>
+                <option value="overcharge">Overcharged</option>
+                <option value="damage">Property Damage</option>
+            </select>
+            
+            <textarea placeholder="Describe the issue in detail..." id="dispute-desc"></textarea>
+            
+            <div class="modal-actions">
+                <button class="btn-secondary" onclick="app.hideDisputeModal()">Cancel</button>
+                <button class="btn-primary" onclick="app.submitDispute()">Submit Dispute</button>
+            </div>
+        </div>
+    </div>
+    <section id="trace-screen" class="view">
+        <div class="trace-header">
+            <div class="trace-title">
+                <i class="ph-fill ph-brain"></i>
+                <span>Agent Reasoning Trace</span>
+            </div>
+            <button class="trace-close" onclick="app.navigate('chat-screen')">
+                <i class="ph ph-x"></i>
+            </button>
+        </div>
+        <div class="trace-content" id="trace-logs">
+            <!-- Trace steps will be injected here -->
+        </div>
+        <div class="trace-footer" id="trace-status">
+            <div class="spinner"></div>
+            <span>Agents are thinking...</span>
+        </div>
     </section>
 
     <!-- ==================== BOTTOM NAV BAR ==================== -->
