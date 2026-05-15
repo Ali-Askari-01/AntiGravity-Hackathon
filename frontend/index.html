@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Service Booking App</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Input View -->
+        <div id="input-view" class="view active">
+            <header>
+                <h1>What do you need help with?</h1>
+                <p>Type your request in any language.</p>
+            </header>
+            <main>
+                <div class="input-area">
+                    <textarea id="user-request" placeholder="e.g. Need a plumber urgently..."></textarea>
+                    <button id="analyze-btn" class="primary-btn">Find Providers</button>
+                </div>
+            </main>
+        </div>
+
+        <!-- Trace / Analysis View -->
+        <div id="trace-view" class="view">
+            <header>
+                <h1>Analyzing Request...</h1>
+            </header>
+            <main>
+                <div class="trace-steps">
+                    <div class="step" id="step-zuban">
+                        <div class="spinner"></div>
+                        <p>Zuban: Understanding Intent...</p>
+                    </div>
+                    <div class="step pending" id="step-khoji">
+                        <div class="spinner"></div>
+                        <p>Khoji: Matching Providers...</p>
+                    </div>
+                    <div class="step pending" id="step-jadwal">
+                        <div class="spinner"></div>
+                        <p>Jadwal: Checking Schedules...</p>
+                    </div>
+                    <div class="step pending" id="step-qeemat">
+                        <div class="spinner"></div>
+                        <p>Qeemat: Calculating Price...</p>
+                    </div>
+                </div>
+            </main>
+        </div>
+
+        <!-- Proposal View -->
+        <div id="proposal-view" class="view">
+            <header>
+                <h1>Top Matches</h1>
+                <p id="proposal-slot">Scheduled for Today at 2:00 PM</p>
+            </header>
+            <main>
+                <div class="providers-list" id="providers-container">
+                    <!-- Providers will be injected here -->
+                </div>
+                <div class="price-breakdown">
+                    <h3>Estimated Price: <span id="total-price">₨ 2,500</span></h3>
+                    <button id="book-btn" class="primary-btn">Confirm Booking</button>
+                </div>
+            </main>
+        </div>
+
+        <!-- Confirmation View -->
+        <div id="confirmation-view" class="view">
+            <header>
+                <h1>Booking Confirmed!</h1>
+            </header>
+            <main>
+                <div class="receipt">
+                    <div class="success-icon">✓</div>
+                    <p>Your provider is on the way.</p>
+                    <div class="receipt-details">
+                        <p><strong>Code:</strong> <span id="conf-code"></span></p>
+                        <p><strong>Provider:</strong> <span id="conf-provider"></span></p>
+                        <p><strong>Reminders:</strong> T-60min, T-15min scheduled</p>
+                    </div>
+                    <button id="home-btn" class="secondary-btn">Back to Home</button>
+                </div>
+            </main>
+        </div>
+    </div>
+    <script src="app.js"></script>
+</body>
+</html>

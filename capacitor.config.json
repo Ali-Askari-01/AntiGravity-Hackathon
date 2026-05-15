@@ -1,0 +1,6 @@
+{
+  "appId": "com.antigravity.booking",
+  "appName": "Service Booking App",
+  "webDir": "frontend",
+  "bundledWebRuntime": false
+}
