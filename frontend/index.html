@@ -2,90 +2,199 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Service Booking App</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Antigravity Services</title>
+    
+    <!-- Google Fonts: Outfit -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    
     <link rel="stylesheet" href="styles.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
-    <div class="app-container">
-        <!-- Input View -->
-        <div id="input-view" class="view active">
-            <header>
-                <h1>What do you need help with?</h1>
-                <p>Type your request in any language.</p>
-            </header>
-            <main>
-                <div class="input-area">
-                    <textarea id="user-request" placeholder="e.g. Need a plumber urgently..."></textarea>
-                    <button id="analyze-btn" class="primary-btn">Find Providers</button>
-                </div>
-            </main>
-        </div>
 
-        <!-- Trace / Analysis View -->
-        <div id="trace-view" class="view">
-            <header>
-                <h1>Analyzing Request...</h1>
-            </header>
-            <main>
-                <div class="trace-steps">
-                    <div class="step" id="step-zuban">
-                        <div class="spinner"></div>
-                        <p>Zuban: Understanding Intent...</p>
-                    </div>
-                    <div class="step pending" id="step-khoji">
-                        <div class="spinner"></div>
-                        <p>Khoji: Matching Providers...</p>
-                    </div>
-                    <div class="step pending" id="step-jadwal">
-                        <div class="spinner"></div>
-                        <p>Jadwal: Checking Schedules...</p>
-                    </div>
-                    <div class="step pending" id="step-qeemat">
-                        <div class="spinner"></div>
-                        <p>Qeemat: Calculating Price...</p>
-                    </div>
-                </div>
-            </main>
+    <!-- ==================== SPLASH SCREEN ==================== -->
+    <section id="splash-screen" class="view active">
+        <div class="splash-content">
+            <div class="logo-container pulse-anim">
+                <i class="ph-fill ph-rocket-launch logo-icon"></i>
+                <h1 class="logo-text">Antigravity</h1>
+            </div>
         </div>
+        <div class="splash-bottom-sheet slide-up-anim">
+            <h2>Your Local Experts.</h2>
+            <p>Book trusted professionals for any job, instantly.</p>
+            <button class="btn-primary ripple" onclick="app.navigate('auth-screen')">Get Started</button>
+        </div>
+    </section>
 
-        <!-- Proposal View -->
-        <div id="proposal-view" class="view">
-            <header>
-                <h1>Top Matches</h1>
-                <p id="proposal-slot">Scheduled for Today at 2:00 PM</p>
-            </header>
-            <main>
-                <div class="providers-list" id="providers-container">
-                    <!-- Providers will be injected here -->
+    <!-- ==================== AUTH SCREEN ==================== -->
+    <section id="auth-screen" class="view">
+        <div class="auth-container">
+            <div class="auth-header">
+                <h2>Welcome Back</h2>
+                <p>Login to continue booking services.</p>
+            </div>
+            
+            <div class="auth-form">
+                <div class="input-group">
+                    <input type="text" id="phone" required>
+                    <label for="phone">Phone Number</label>
+                    <div class="underline"></div>
                 </div>
-                <div class="price-breakdown">
-                    <h3>Estimated Price: <span id="total-price">₨ 2,500</span></h3>
-                    <button id="book-btn" class="primary-btn">Confirm Booking</button>
+                
+                <div class="input-group">
+                    <input type="password" id="password" required>
+                    <label for="password">Password</label>
+                    <div class="underline"></div>
                 </div>
-            </main>
+                
+                <button class="btn-primary ripple mt-4" onclick="app.login()">Login</button>
+                <button class="btn-text mt-2">Create Account</button>
+            </div>
         </div>
+    </section>
 
-        <!-- Confirmation View -->
-        <div id="confirmation-view" class="view">
-            <header>
-                <h1>Booking Confirmed!</h1>
-            </header>
-            <main>
-                <div class="receipt">
-                    <div class="success-icon">✓</div>
-                    <p>Your provider is on the way.</p>
-                    <div class="receipt-details">
-                        <p><strong>Code:</strong> <span id="conf-code"></span></p>
-                        <p><strong>Provider:</strong> <span id="conf-provider"></span></p>
-                        <p><strong>Reminders:</strong> T-60min, T-15min scheduled</p>
-                    </div>
-                    <button id="home-btn" class="secondary-btn">Back to Home</button>
+    <!-- ==================== HOME DASHBOARD ==================== -->
+    <section id="home-screen" class="view has-bottom-nav">
+        <header class="home-header">
+            <div class="user-info">
+                <img src="https://ui-avatars.com/api/?name=Ali+Askari&background=0A5C36&color=fff" alt="User" class="avatar">
+                <div>
+                    <p class="greeting">Hello, Ali 👋</p>
+                    <p class="location"><i class="ph ph-map-pin"></i> DHA Phase 6, Lahore</p>
                 </div>
-            </main>
-        </div>
-    </div>
+            </div>
+            <button class="icon-btn"><i class="ph ph-bell"></i></button>
+        </header>
+
+        <main class="home-main">
+            <!-- Active Booking Hero -->
+            <div class="hero-card glass-card">
+                <div class="hero-header">
+                    <span class="badge badge-warning">En-route</span>
+                    <span class="time">10 mins away</span>
+                </div>
+                <div class="hero-body">
+                    <div class="provider-info">
+                        <h3>Plumbing Repair</h3>
+                        <p>Zaid Ahmed</p>
+                    </div>
+                    <div class="icon-circle pulse-warning">
+                        <i class="ph ph-wrench"></i>
+                    </div>
+                </div>
+                <div class="hero-footer">
+                    <div class="progress-track">
+                        <div class="progress-fill" style="width: 70%;"></div>
+                    </div>
+                    <p>Arriving at 02:45 PM</p>
+                </div>
+            </div>
+
+            <!-- Services Row -->
+            <h3 class="section-title">Quick Services</h3>
+            <div class="services-row">
+                <div class="service-card ripple">
+                    <div class="icon-wrap bg-blue"><i class="ph ph-drop"></i></div>
+                    <span>Plumbing</span>
+                </div>
+                <div class="service-card ripple">
+                    <div class="icon-wrap bg-yellow"><i class="ph ph-lightning"></i></div>
+                    <span>Electrical</span>
+                </div>
+                <div class="service-card ripple">
+                    <div class="icon-wrap bg-green"><i class="ph ph-broom"></i></div>
+                    <span>Cleaning</span>
+                </div>
+                <div class="service-card ripple">
+                    <div class="icon-wrap bg-purple"><i class="ph ph-hammer"></i></div>
+                    <span>Carpenter</span>
+                </div>
+            </div>
+            
+            <!-- Bookings List -->
+            <h3 class="section-title mt-4">Recent Bookings</h3>
+            <div class="booking-list">
+                <div class="list-item glass-card">
+                    <div class="item-icon"><i class="ph ph-check-circle text-green"></i></div>
+                    <div class="item-details">
+                        <h4>AC Service</h4>
+                        <p>Completed • 12 May</p>
+                    </div>
+                    <div class="item-price">Rs 1,500</div>
+                </div>
+            </div>
+        </main>
+    </section>
+
+    <!-- ==================== CHAT INTERFACE ==================== -->
+    <section id="chat-screen" class="view has-bottom-nav">
+        <header class="chat-header glass-card">
+            <div class="agent-profile">
+                <div class="agent-avatar"><i class="ph-fill ph-robot"></i></div>
+                <div>
+                    <h3>Munsif</h3>
+                    <p class="status">AI Assistant • Online</p>
+                </div>
+            </div>
+            <button class="icon-btn"><i class="ph ph-dots-three-vertical"></i></button>
+        </header>
+
+        <main class="chat-body" id="chat-container">
+            <!-- Mock Chat -->
+            <div class="chat-bubble agent-bubble fade-up-anim">
+                Assalam o Alaikum! Mai Munsif hoon. Aapko aaj kis service ki zaroorat hai?
+            </div>
+            <div class="chat-bubble user-bubble fade-up-anim" style="animation-delay: 0.2s;">
+                Mere AC se pani tapak raha hai, bohot urgent hai!
+            </div>
+            <div class="chat-bubble agent-bubble fade-up-anim" style="animation-delay: 0.4s;">
+                <div class="intent-card">
+                    <p><strong>Intent:</strong> AC Repair</p>
+                    <p><strong>Urgency:</strong> <span class="badge badge-error">Emergency</span></p>
+                </div>
+                Fikr na karain, mai abhi area mein available AC technicians dhoond raha hoon...
+            </div>
+            
+            <div class="typing-indicator fade-up-anim" style="animation-delay: 0.6s;" id="typing-indicator">
+                <span></span><span></span><span></span>
+            </div>
+        </main>
+
+        <footer class="chat-footer glass-card">
+            <button class="icon-btn"><i class="ph ph-paperclip"></i></button>
+            <div class="chat-input-wrapper">
+                <input type="text" placeholder="Type a message..." id="chat-input">
+            </div>
+            <button class="send-btn ripple" onclick="app.sendMessage()"><i class="ph-fill ph-paper-plane-right"></i></button>
+        </footer>
+    </section>
+
+    <!-- ==================== BOTTOM NAV BAR ==================== -->
+    <nav class="bottom-nav glass-card" id="bottom-nav">
+        <a href="#" class="nav-item active" onclick="app.navigate('home-screen', this)">
+            <i class="ph ph-house"></i>
+            <span>Home</span>
+        </a>
+        <a href="#" class="nav-item" onclick="app.navigate('chat-screen', this)">
+            <i class="ph ph-chat-teardrop-text"></i>
+            <span>Ask Munsif</span>
+        </a>
+        <a href="#" class="nav-item" onclick="app.navigate('home-screen', this)">
+            <i class="ph ph-calendar-check"></i>
+            <span>Bookings</span>
+        </a>
+        <a href="#" class="nav-item" onclick="app.navigate('home-screen', this)">
+            <i class="ph ph-user"></i>
+            <span>Profile</span>
+        </a>
+    </nav>
+
     <script src="app.js"></script>
 </body>
 </html>

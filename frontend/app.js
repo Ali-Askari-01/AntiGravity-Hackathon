@@ -1,127 +1,138 @@
-document.addEventListener('DOMContentLoaded', () => {
-    // Views
-    const inputView = document.getElementById('input-view');
-    const traceView = document.getElementById('trace-view');
-    const proposalView = document.getElementById('proposal-view');
-    const confirmationView = document.getElementById('confirmation-view');
+/**
+ * Antigravity Frontend Router & Logic
+ * This mimics a Single Page Application (SPA) for Capacitor.js
+ */
 
-    // Buttons
-    const analyzeBtn = document.getElementById('analyze-btn');
-    const bookBtn = document.getElementById('book-btn');
-    const homeBtn = document.getElementById('home-btn');
+const app = {
+    // Current active screen
+    currentScreen: 'splash-screen',
 
-    // Data elements
-    const providersContainer = document.getElementById('providers-container');
-    const totalPriceEl = document.getElementById('total-price');
-    const confCodeEl = document.getElementById('conf-code');
-    const confProviderEl = document.getElementById('conf-provider');
+    // Initialize the app
+    init() {
+        console.log("Antigravity App Initialized");
+        
+        // Auto-hide splash screen after 3 seconds for demo purposes
+        // In reality, this would happen after loading initial data/auth checks
+        setTimeout(() => {
+            // Check if user is logged in (mock)
+            // this.navigate('home-screen'); // If logged in
+        }, 3000);
 
-    // State
-    let selectedProvider = null;
+        // Bind Enter key on chat input
+        const chatInput = document.getElementById('chat-input');
+        if(chatInput) {
+            chatInput.addEventListener('keypress', function (e) {
+                if (e.key === 'Enter') {
+                    app.sendMessage();
+                }
+            });
+        }
+    },
 
-    // Mock Data
-    const mockProviders = [
-        { id: 1, name: 'Ali Raza', rating: '4.9 ★', match: '98% Match', price: 2500 },
-        { id: 2, name: 'Usman Khan', rating: '4.7 ★', match: '92% Match', price: 2200 },
-        { id: 3, name: 'Bilal Ahmed', rating: '4.5 ★', match: '85% Match', price: 2000 }
-    ];
+    // Navigate between screens
+    navigate(screenId, navElement = null) {
+        // Hide all screens
+        document.querySelectorAll('.view').forEach(view => {
+            view.classList.remove('active');
+        });
 
-    function switchView(hideView, showView) {
-        hideView.classList.remove('active');
-        showView.classList.add('active');
-    }
-
-    // Step 1: Analyze Request
-    analyzeBtn.addEventListener('click', () => {
-        const text = document.getElementById('user-request').value.trim();
-        if (!text) return;
-
-        switchView(inputView, traceView);
-        runTraceSimulation();
-    });
-
-    function runTraceSimulation() {
-        const steps = ['zuban', 'khoji', 'jadwal', 'qeemat'];
-        let currentStep = 0;
-
-        function advanceStep() {
-            if (currentStep > 0) {
-                // Mark previous as done
-                const prevStepEl = document.getElementById(`step-${steps[currentStep-1]}`);
-                prevStepEl.classList.remove('pending');
-                prevStepEl.classList.add('done');
-                // The spinner in CSS becomes a checkmark when .done is added
-            }
-
-            if (currentStep < steps.length) {
-                // Activate current
-                const currStepEl = document.getElementById(`step-${steps[currentStep]}`);
-                currStepEl.classList.remove('pending');
-                
-                setTimeout(advanceStep, 1000); // Wait 1 second per step
-                currentStep++;
-            } else {
-                // All steps done, go to proposal
-                setTimeout(() => {
-                    populateProviders();
-                    switchView(traceView, proposalView);
-                    
-                    // Reset trace view for next time
-                    steps.forEach(s => {
-                        const el = document.getElementById(`step-${s}`);
-                        el.className = 'step pending';
-                    });
-                    document.getElementById('step-zuban').classList.remove('pending');
-                }, 500);
-            }
+        // Show target screen
+        const targetScreen = document.getElementById(screenId);
+        if (targetScreen) {
+            targetScreen.classList.add('active');
+            this.currentScreen = screenId;
         }
 
-        advanceStep();
-    }
+        // Handle Bottom Nav Bar visibility
+        const bottomNav = document.getElementById('bottom-nav');
+        if (targetScreen.classList.contains('has-bottom-nav')) {
+            bottomNav.style.display = 'flex';
+        } else {
+            bottomNav.style.display = 'none';
+        }
 
-    // Step 2: Show Proposals
-    function populateProviders() {
-        providersContainer.innerHTML = '';
-        mockProviders.forEach((provider, index) => {
-            const card = document.createElement('div');
-            card.className = `provider-card ${index === 0 ? 'selected' : ''}`;
-            card.innerHTML = `
-                <div class="provider-header">
-                    <span class="provider-name">${provider.name}</span>
-                    <span class="provider-rating">${provider.rating}</span>
+        // Handle Nav Bar Active States
+        if (navElement) {
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            navElement.classList.add('active');
+        } else {
+            // Auto update nav if navigating programmatically (e.g. from splash to home)
+            if(screenId === 'home-screen') {
+                document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+                document.querySelectorAll('.nav-item')[0].classList.add('active');
+            }
+        }
+    },
+
+    // Mock Login Function
+    login() {
+        const phone = document.getElementById('phone').value;
+        const password = document.getElementById('password').value;
+
+        if (phone && password) {
+            // Add a quick button animation/loading state here if desired
+            setTimeout(() => {
+                this.navigate('home-screen');
+            }, 500);
+        } else {
+            alert("Please enter phone and password.");
+        }
+    },
+
+    // Send Message in Chat
+    sendMessage() {
+        const input = document.getElementById('chat-input');
+        const messageText = input.value.trim();
+
+        if (messageText === '') return;
+
+        const chatContainer = document.getElementById('chat-container');
+        const typingIndicator = document.getElementById('typing-indicator');
+
+        // 1. Create and append User Bubble
+        const userBubble = document.createElement('div');
+        userBubble.className = 'chat-bubble user-bubble fade-up-anim';
+        userBubble.textContent = messageText;
+        
+        // Insert before typing indicator
+        chatContainer.insertBefore(userBubble, typingIndicator);
+        
+        // Clear input
+        input.value = '';
+        
+        // Scroll to bottom
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+
+        // 2. Show Typing Indicator
+        typingIndicator.style.display = 'flex';
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+
+        // 3. Simulate Agent Response (Mock)
+        setTimeout(() => {
+            typingIndicator.style.display = 'none';
+            
+            const agentBubble = document.createElement('div');
+            agentBubble.className = 'chat-bubble agent-bubble fade-up-anim';
+            
+            // Mocking a response
+            agentBubble.innerHTML = `
+                <div class="intent-card">
+                    <p><strong>Intent:</strong> General Query</p>
+                    <p><strong>Confidence:</strong> 0.85</p>
                 </div>
-                <div class="provider-match">${provider.match}</div>
+                Ji zaroor, mai aapki madad kar sakta hoon. Tafseel batayen.
             `;
             
-            if (index === 0) {
-                selectedProvider = provider;
-                totalPriceEl.textContent = `₨ ${provider.price.toLocaleString()}`;
-            }
+            chatContainer.insertBefore(agentBubble, typingIndicator);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
 
-            card.addEventListener('click', () => {
-                document.querySelectorAll('.provider-card').forEach(c => c.classList.remove('selected'));
-                card.classList.add('selected');
-                selectedProvider = provider;
-                totalPriceEl.textContent = `₨ ${provider.price.toLocaleString()}`;
-            });
-
-            providersContainer.appendChild(card);
-        });
+        }, 1500); // Simulate network delay
     }
+};
 
-    // Step 3: Book
-    bookBtn.addEventListener('click', () => {
-        switchView(proposalView, confirmationView);
-        
-        // Generate random code
-        const code = 'BKG-' + Math.random().toString(36).substr(2, 6).toUpperCase();
-        confCodeEl.textContent = code;
-        confProviderEl.textContent = selectedProvider.name;
-    });
-
-    // Step 4: Back to Home
-    homeBtn.addEventListener('click', () => {
-        document.getElementById('user-request').value = '';
-        switchView(confirmationView, inputView);
-    });
+// Start the app when DOM is loaded
+document.addEventListener('DOMContentLoaded', () => {
+    app.init();
 });
