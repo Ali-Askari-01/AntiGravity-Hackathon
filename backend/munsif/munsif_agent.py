@@ -1,14 +1,12 @@
 from sqlalchemy.orm import Session
 from backend.database import SessionLocal
 from backend import models
-from backend.zuban.zuban_agent import ZubanAgent
-from typing import Dict, Any, Optional
 import uuid
 import json
-
+from typing import Dict, Any, Optional
 class MunsifAgent:
     def __init__(self):
-        self.zuban = ZubanAgent()
+        pass
 
     def _get_db_session(self):
         return SessionLocal()
@@ -64,38 +62,14 @@ class MunsifAgent:
         session_data = self.get_session(session_id)
         if not session_data:
             raise ValueError("Session not found")
-
-        # Step 1: Call Zuban to parse intent
-        self.add_workplan_step(session_id, "Munsif", "Calling Zuban (NLP Agent)")
         
-        try:
-            intent_res = self.zuban.parse_input(raw_input)
-        except ValueError as e:
-            self.add_workplan_step(session_id, "Zuban", "Failed to parse intent", error=str(e))
-            return {
-                "message": str(e),
-                "session_state": self.get_session(session_id)
-            }
-
-        intent_data = intent_res.model_dump()
-        self.add_workplan_step(session_id, "Zuban", f"Intent Parsed: {intent_res.service_label}", result=intent_data)
+        # In pure ADK mode, process_input shouldn't be used to call Zuban directly.
+        # This function is kept for backward compatibility if needed.
+        self.add_workplan_step(session_id, "Munsif", "Processing input (delegated to ADK)")
         
-        # Update context in DB
-        db = self._get_db_session()
-        try:
-            db_session = db.query(models.Session).filter(models.Session.id == session_id).first()
-            if db_session:
-                db_session.context = {"intent": intent_data}
-                db.commit()
-        finally:
-            db.close()
-
-        # Step 2: Route to Khoji
-        self.add_workplan_step(session_id, "Munsif", f"Routing to Khoji for {intent_res.service_label} search in {intent_res.location}")
-
         return {
-            "message": f"Samajh gaya! '{intent_res.service_label}' ki talash {intent_res.location} mein ho rahi hai.",
-            "intent": intent_data,
-            "next_step": "khoji_search",
+            "message": "Input received",
             "session_state": self.get_session(session_id)
         }
+        
+
