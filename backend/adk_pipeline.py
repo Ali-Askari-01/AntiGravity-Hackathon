@@ -190,14 +190,11 @@ def create_booking(session_id: str, provider_id: int, service_type: str,
             
         code = f"XIDMAT-{random.randint(1000, 9999)}"
         booking = Booking(
-            user_id="user_123",
+            session_id=session_id,
             provider_id=provider_id,
             service_type=service_type,
             status="confirmed",
-            location=location,
-            distance_km=distance_km,
-            urgency=urgency,
-            scheduled_time=confirmed_slot,
+            confirmed_slot=confirmed_slot,
             confirmation_code=code
         )
         db.add(booking)
