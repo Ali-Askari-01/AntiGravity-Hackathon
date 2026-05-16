@@ -13,6 +13,10 @@
     <!-- Phosphor Icons -->
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
     
+    <!-- Leaflet.js for Maps -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -188,7 +192,7 @@
             </div>
 
             <div class="confirmation-actions mt-4">
-                <button class="btn-primary" onclick="app.navigate('tracking-screen')">Track Provider</button>
+                <button class="btn-primary" onclick="app.startTrackingSimulation()">Track Provider</button>
                 <button class="btn-text" onclick="app.navigate('home-screen')">Book Another Service</button>
             </div>
         </div>
@@ -200,12 +204,7 @@
             <button class="icon-btn" onclick="app.navigate('home-screen')"><i class="ph ph-arrow-left"></i></button>
             <h3>Service Tracking</h3>
         </header>
-        <div class="tracking-map">
-            <img src="https://api.dicebear.com/7.x/identicon/svg?seed=map" alt="Map" class="map-placeholder">
-            <div class="provider-marker pulse-anim">
-                <i class="ph-fill ph-bicycle"></i>
-            </div>
-        </div>
+        <div id="map" class="tracking-map-container"></div>
         <div class="tracking-info-card slide-up-anim">
             <div class="provider-strip">
                 <img src="https://ui-avatars.com/api/?name=Ali+AC&background=0A5C36&color=fff" alt="Provider" class="avatar">

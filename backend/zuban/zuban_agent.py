@@ -4,6 +4,7 @@ import logging
 from pydantic import BaseModel, ValidationError
 from google import genai
 from dotenv import load_dotenv
+from datetime import datetime
 
 load_dotenv()
 
@@ -41,7 +42,7 @@ class ZubanAgent:
         if not api_key:
             raise EnvironmentError("GEMINI_API_KEY not set in environment.")
         self.client = genai.Client(api_key=api_key)
-        self.model = "gemini-2.5-flash"
+        self.model = "gemini-2.0-flash"
 
     def parse_input(self, text: str) -> IntentResponse:
         prompt = f"{SYSTEM_PROMPT}\n\nInput: \"{text}\"\nOutput:"
@@ -49,6 +50,10 @@ class ZubanAgent:
         try:
             return self._call_llm(prompt)
         except Exception as e:
+            if "429" in str(e) or "quota" in str(e).lower():
+                logger.warning("LLM Quota exhausted. Using keyword-based fallback.")
+                return self._fallback_parse(text)
+                
             logger.warning(f"First LLM call failed: {e}. Retrying with stricter prompt...")
             stricter_prompt = (
                 prompt
@@ -59,7 +64,53 @@ class ZubanAgent:
                 return self._call_llm(stricter_prompt)
             except Exception as retry_e:
                 logger.error(f"Retry also failed: {retry_e}")
-                raise ValueError("Dobara likhein — request samajh nahi aayi.")
+                # Last resort fallback
+                return self._fallback_parse(text)
+
+    def _fallback_parse(self, text: str) -> IntentResponse:
+        text = text.lower()
+        
+        # Simple keyword matching with priority
+        service_keywords = [
+            (r"\bac\b", "ac_technician", "AC Technician"),
+            (r"\bair condition", "ac_technician", "AC Technician"),
+            (r"\bplumber", "plumber", "Plumber"),
+            (r"\belectrician", "electrician", "Electrician"),
+            (r"\bbijli", "electrician", "Electrician"),
+            (r"\bclean", "cleaner", "Cleaner"),
+            (r"\bsafai", "cleaner", "Cleaner"),
+            (r"\bmechanic", "mechanic", "Mechanic"),
+            (r"\bcar\b", "mechanic", "Mechanic"),
+            (r"\bmistri", "carpenter", "Carpenter"),
+            (r"\bcarpenter", "carpenter", "Carpenter"),
+            (r"\bpaint", "painter", "Painter"),
+            (r"\brang\b", "painter", "Painter"),
+        ]
+        
+        import re
+        selected_service = ("general", "General Service")
+        for pattern, s_type, s_label in service_keywords:
+            if re.search(pattern, text):
+                selected_service = (s_type, s_label)
+                break
+                
+        # Location matching
+        locations = ["g-13", "g-11", "g-10", "f-10", "f-7", "f-8", "f-6", "i-8", "i-9", "dha", "gulshan", "clifton"]
+        selected_loc = "Islamabad"
+        for loc in locations:
+            if loc in text:
+                selected_loc = loc.upper()
+                break
+        
+        return IntentResponse(
+            service_type=selected_service[0],
+            service_label=selected_service[1],
+            location=selected_loc,
+            time_raw="As soon as possible",
+            time_normalized=datetime.now().isoformat(),
+            urgency="urgent" if "urgent" in text or "emergency" in text or "fauri" in text else "normal",
+            language_detected="detected_via_fallback"
+        )
 
     def _call_llm(self, prompt: str) -> IntentResponse:
         response = self.client.models.generate_content(
@@ -67,6 +118,7 @@ class ZubanAgent:
             contents=prompt,
         )
         text_response = response.text.strip()
+        print(f"DEBUG: Raw LLM response: '{text_response}'")
 
         # Strip markdown fences if present
         if text_response.startswith("```json"):
@@ -81,6 +133,8 @@ class ZubanAgent:
             parsed_json = json.loads(text_response)
             return IntentResponse(**parsed_json)
         except json.JSONDecodeError as e:
+            logger.error(f"JSON Decode Error: {e}. Raw: {text_response}")
             raise ValueError(f"Failed to parse JSON: {e}")
         except ValidationError as e:
+            logger.error(f"Validation Error: {e}")
             raise ValueError(f"JSON does not match schema: {e}")

@@ -6,17 +6,41 @@
 const app = {
     // Current active screen
     currentScreen: 'splash-screen',
+    
+    // API Configuration
+    apiBase: 'http://127.0.0.1:8000',
+    sessionId: null,
+
+    // Helper for API calls
+    async callAPI(endpoint, method = 'POST', data = null) {
+        try {
+            const options = {
+                method: method,
+                headers: { 'Content-Type': 'application/json' },
+            };
+            if (data) options.body = JSON.stringify(data);
+            
+            const response = await fetch(`${this.apiBase}${endpoint}`, options);
+            const result = await response.json();
+            
+            if (!response.ok) {
+                throw new Error(result.detail || 'API request failed');
+            }
+            return result;
+        } catch (error) {
+            console.error(`API Error (${endpoint}):`, error);
+            throw error;
+        }
+    },
 
     // Initialize the app
     init() {
         console.log("Antigravity App Initialized");
         
-        // Auto-hide splash screen after 3 seconds for demo purposes
-        // In reality, this would happen after loading initial data/auth checks
+        // Auto-hide splash screen after 2.5 seconds
         setTimeout(() => {
-            // Check if user is logged in (mock)
-            // this.navigate('home-screen'); // If logged in
-        }, 3000);
+            this.navigate('auth-screen');
+        }, 2500);
 
         // Bind Enter key on chat input
         const chatInput = document.getElementById('chat-input');
@@ -27,6 +51,99 @@ const app = {
                 }
             });
         }
+    },
+
+    // Load recent bookings on home screen
+    async loadRecentBookings() {
+        try {
+            const bookings = await this.callAPI('/bookings', 'GET');
+            const list = document.querySelector('.booking-list');
+            if (!list) return;
+            list.innerHTML = '';
+            if (!bookings || bookings.length === 0) {
+                list.innerHTML = '<p class="text-muted" style="text-align:center;padding:16px;">No recent bookings.</p>';
+                return;
+            }
+            bookings.slice(0, 3).forEach(b => {
+                const item = document.createElement('div');
+                item.className = 'booking-list-item glass-card mb-2';
+                item.innerHTML = `
+                    <div class="booking-item-row">
+                        <div class="booking-item-icon">
+                            <i class="ph-fill ph-calendar-check"></i>
+                        </div>
+                        <div class="booking-item-info">
+                            <strong>${b.service_type ? b.service_type.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase()) : 'Service'}</strong>
+                            <p>${b.confirmation_code || ''} • <span class="status-badge status-${(b.status||'').toLowerCase()}">${b.status || 'N/A'}</span></p>
+                        </div>
+                        <div class="booking-item-price">PKR ${b.price ? Math.round(b.price).toLocaleString() : 'N/A'}</div>
+                    </div>
+                `;
+                list.appendChild(item);
+            });
+        } catch (e) {
+            console.warn('Could not load bookings:', e);
+        }
+    },
+
+    // Poll live trace from GET /trace/{session_id}
+    async pollLiveTrace(session_id, onComplete) {
+        this.navigate('trace-screen');
+        const traceLogs = document.getElementById('trace-logs');
+        const traceStatus = document.getElementById('trace-status');
+        traceLogs.innerHTML = '';
+
+        const agentMeta = {
+            'Munsif': { icon: '🧠' }, 'Zuban': { icon: '🔍' }, 'Khoji': { icon: '📡' },
+            'Jadwal': { icon: '🗓️' }, 'Qeemat': { icon: '💰' }, 'Meezan': { icon: '📋' },
+            'Insaf': { icon: '⚖️' }, 'Hukum': { icon: '📝' }, 'System': { icon: '⚙️' }
+        };
+
+        let lastStepCount = 0;
+        let tries = 0;
+        const maxTries = 20;
+
+        const poll = async () => {
+            tries++;
+            try {
+                const res = await this.callAPI(`/trace/${session_id}`, 'GET');
+                const steps = res.steps || [];
+
+                // Render new steps
+                for (let i = lastStepCount; i < steps.length; i++) {
+                    const step = steps[i];
+                    const icon = agentMeta[step.agent]?.icon || '🤖';
+                    const stepEl = document.createElement('div');
+                    stepEl.className = `trace-step ${step.stage === 'error' ? 'warning' : 'success'} fade-up-anim`;
+                    stepEl.innerHTML = `
+                        <div class="trace-icon">${icon}</div>
+                        <div class="trace-agent">[${step.agent}]</div>
+                        <div class="trace-msg">${step.message}</div>
+                        <div class="trace-time">#${step.step_number}</div>
+                    `;
+                    traceLogs.appendChild(stepEl);
+                    traceLogs.scrollTop = traceLogs.scrollHeight;
+                }
+                lastStepCount = steps.length;
+            } catch (e) {
+                console.warn('Trace poll error:', e);
+            }
+
+            if (tries < maxTries) {
+                setTimeout(poll, 600);
+            } else {
+                traceStatus.innerHTML = `<span>✅ Processing complete.</span>`;
+                const doneBtn = document.createElement('button');
+                doneBtn.className = 'trace-done-btn fade-up-anim';
+                doneBtn.style.display = 'block';
+                doneBtn.textContent = onComplete ? 'Continue' : 'Back to Home';
+                doneBtn.onclick = () => { if (onComplete) onComplete(); else this.navigate('home-screen'); };
+                traceLogs.appendChild(doneBtn);
+                traceLogs.scrollTop = traceLogs.scrollHeight;
+            }
+        };
+
+        setTimeout(poll, 500);
     },
 
     // Home Screen Logic
@@ -59,9 +176,15 @@ const app = {
         const input = document.getElementById('home-request-input');
         if (input.value.trim() === '') return;
         
-        // Transfer text to chat just in case
-        document.getElementById('chat-input').value = input.value;
-        this.runTrace();
+        const messageText = input.value;
+        this.navigate('chat-screen');
+        
+        // Clear home input and fill chat input
+        document.getElementById('chat-input').value = messageText;
+        input.value = '';
+        
+        // Trigger send
+        this.sendMessage();
     },
 
     // Navigate between screens
@@ -101,15 +224,185 @@ const app = {
         }
     },
 
+    // Search for providers via Khoji
+    async searchProviders(intent) {
+        this.addAgentResponse("Theek hai! Mai behtareen providers dhoond raha hoon...");
+        
+        try {
+            const res = await this.callAPI('/search', 'POST', {
+                session_id: this.sessionId,
+                service_type: intent.service_type,
+                location: intent.location,
+                urgency: intent.urgency
+            });
+
+            if (res.status === 'success') {
+                const providers = res.top_providers;
+                const agentBubble = document.createElement('div');
+                agentBubble.className = 'chat-bubble agent-bubble fade-up-anim';
+                
+                let content = `<p>${res.message}</p><div class="provider-list mt-2">`;
+                providers.forEach(p => {
+                    content += `
+                        <div class="provider-option-card glass-card mb-2" onclick="app.selectProvider(${JSON.stringify(p).replace(/"/g, '&quot;')}, ${JSON.stringify(intent).replace(/"/g, '&quot;')})">
+                            <div class="provider-row">
+                                <img src="https://ui-avatars.com/api/?name=${p.name.replace(/ /g, '+')}&background=1A56DB&color=fff" class="avatar-sm">
+                                <div class="provider-info">
+                                    <strong>${p.name}</strong>
+                                    <p>⭐ ${p.rating} • ${p.distance_km}km • ${p.rationale}</p>
+                                </div>
+                                <div class="price-tag">PKR ${p.base_price}</div>
+                            </div>
+                        </div>
+                    `;
+                });
+                content += `</div>`;
+                agentBubble.innerHTML = content;
+                
+                const chatContainer = document.getElementById('chat-container');
+                const typingIndicator = document.getElementById('typing-indicator');
+                chatContainer.insertBefore(agentBubble, typingIndicator);
+                chatContainer.scrollTop = chatContainer.scrollHeight;
+            } else {
+                this.addAgentResponse(res.message);
+            }
+        } catch (error) {
+            this.addAgentResponse("Khoji se rabta nahi ho saka. (Search failed)");
+        }
+    },
+
+    async selectProvider(provider, intent) {
+        this.selectedProvider = provider;
+        this.currentIntent = intent;
+        
+        // Show availability check
+        this.addAgentResponse(`Aap ne **${provider.name}** ko muntakhib kiya hai. Mai unka schedule check kar raha hoon...`);
+        
+        try {
+            // We'll use the normalized time from intent for the check
+            const res = await this.callAPI('/check_schedule', 'POST', {
+                session_id: this.sessionId,
+                provider_id: provider.provider_id,
+                requested_start: intent.time_normalized
+            });
+
+            if (res.status === 'available') {
+                const agentBubble = document.createElement('div');
+                agentBubble.className = 'chat-bubble agent-bubble fade-up-anim';
+                agentBubble.innerHTML = `
+                    <p>✅ Ye slot available hai! Kya mai aapki booking confirm kar doon?</p>
+                    <button class="btn-primary mt-2" onclick="app.confirmBooking()">Confirm Booking</button>
+                `;
+                const chatContainer = document.getElementById('chat-container');
+                const typingIndicator = document.getElementById('typing-indicator');
+                chatContainer.insertBefore(agentBubble, typingIndicator);
+                chatContainer.scrollTop = chatContainer.scrollHeight;
+            } else {
+                this.addAgentResponse("Maazrat! Ye provider is waqt masroof hain. (Slot unavailable)");
+            }
+        } catch (error) {
+            this.addAgentResponse("Jadwal se rabta nahi ho saka. (Schedule check failed)");
+        }
+    },
+
+    async confirmBooking() {
+        this.addAgentResponse("Booking confirm ho rahi hai... Qeemat aur Meezan agents kaam kar rahe hain.");
+        
+        try {
+            const res = await this.callAPI('/book', 'POST', {
+                session_id: this.sessionId,
+                provider_id: this.selectedProvider.provider_id,
+                service_type: this.currentIntent.service_type,
+                location: this.currentIntent.location,
+                distance_km: this.selectedProvider.distance_km,
+                urgency: this.currentIntent.urgency,
+                confirmed_slot: (this.currentIntent.time_raw || 'Today') + " — " + (this.currentIntent.time_normalized || 'ASAP')
+            });
+
+            // Show Confirmation Screen
+            document.getElementById('conf-code').textContent = res.confirmation_code;
+
+            // Update provider name
+            const provNameEl = document.querySelector('#confirmation-screen h4');
+            if (provNameEl) provNameEl.textContent = res.provider_name;
+
+            // Update avatar in confirmation
+            const provAvatarEl = document.querySelector('#confirmation-screen .provider-row img');
+            if (provAvatarEl) provAvatarEl.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(res.provider_name)}&background=1A56DB&color=fff`;
+
+            // Update meta
+            const metaPs = document.querySelectorAll('#confirmation-screen .booking-meta p');
+            if (metaPs[0]) metaPs[0].innerHTML = `<i class="ph ph-calendar"></i> ${res.confirmed_slot}`;
+            if (metaPs[1]) metaPs[1].innerHTML = `<i class="ph ph-map-pin"></i> ${res.location}`;
+
+            // Update rating in confirmation
+            const ratingEl = document.querySelector('#confirmation-screen .provider-details p');
+            if (ratingEl) ratingEl.innerHTML = `<i class="ph-fill ph-star text-yellow"></i> ${res.provider_rating} • ${res.distance_km}km away`;
+            
+            // Price breakdown from structured breakdown object
+            const breakdownList = document.querySelector('.breakdown-list');
+            breakdownList.innerHTML = '';
+
+            if (res.price_breakdown) {
+                // Parse newline-separated trace log
+                const lines = res.price_breakdown.split('\n');
+                const labelMap = {
+                    'Base rate': 'Base Rate',
+                    'Urgency': 'Urgency Premium',
+                    'Distance': 'Distance Charge',
+                    'Peak hour': 'Peak Hour Factor',
+                    'Quality premium': 'Quality Premium',
+                    'Experience bonus': 'Experience Factor',
+                };
+                lines.forEach(line => {
+                    const match = line.match(/([^:]+):\s+([\+\-]?PKR[\d,\.]+|[\+\-]?x[\d\.]+)/i);
+                    if (match) {
+                        const row = document.createElement('div');
+                        row.className = 'breakdown-row';
+                        const key = match[1].trim().replace('💰 Calculating price...', '').trim();
+                        if (key) {
+                            row.innerHTML = `<span>${key}</span><span>${match[2].trim()}</span>`;
+                            breakdownList.appendChild(row);
+                        }
+                    }
+                });
+            }
+            
+            const totalRow = document.createElement('div');
+            totalRow.className = 'breakdown-row border-top';
+            totalRow.innerHTML = `<span><strong>Total Price</strong></span><span><strong>PKR ${res.final_price.toLocaleString()}</strong></span>`;
+            breakdownList.appendChild(totalRow);
+
+            this.currentBooking = res;
+
+            // Update tracking screen with real provider info
+            const trackAvatar = document.querySelector('#tracking-screen .provider-strip img');
+            if (trackAvatar) trackAvatar.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(res.provider_name)}&background=0A5C36&color=fff`;
+            const trackName = document.querySelector('#tracking-screen .provider-meta h4');
+            if (trackName) trackName.textContent = res.provider_name;
+            const trackRating = document.querySelector('#tracking-screen .provider-meta p');
+            if (trackRating) trackRating.innerHTML = `<i class="ph-fill ph-star text-yellow"></i> ${res.provider_rating} • Service Provider`;
+
+            // Update feedback screen price
+            const feedbackPrice = document.querySelector('.final-invoice strong');
+            if (feedbackPrice) feedbackPrice.textContent = `PKR ${res.final_price.toLocaleString()}`;
+
+            this.navigate('confirmation-screen');
+        } catch (error) {
+            console.error(error);
+            this.addAgentResponse("Booking fail ho gayi. (Booking failed)");
+        }
+    },
+
     // Mock Login Function
     login() {
         const phone = document.getElementById('phone').value;
         const password = document.getElementById('password').value;
 
         if (phone && password) {
-            // Add a quick button animation/loading state here if desired
             setTimeout(() => {
                 this.navigate('home-screen');
+                this.loadRecentBookings();
             }, 500);
         } else {
             alert("Please enter phone and password.");
@@ -117,7 +410,7 @@ const app = {
     },
 
     // Send Message in Chat
-    sendMessage() {
+    async sendMessage() {
         const input = document.getElementById('chat-input');
         const messageText = input.value.trim();
 
@@ -139,61 +432,95 @@ const app = {
         typingIndicator.style.display = 'flex';
         chatContainer.scrollTop = chatContainer.scrollHeight;
 
-        // 3. Simulate Agent Response (Mock)
-        setTimeout(() => {
+        try {
+            // 3. Call Backend
+            const res = await this.callAPI('/chat', 'POST', {
+                session_id: this.sessionId,
+                text: messageText
+            });
+
+            this.sessionId = res.session_id;
             typingIndicator.style.display = 'none';
+
+            // 4. Add Agent Response
+            const agentBubble = document.createElement('div');
+            agentBubble.className = 'chat-bubble agent-bubble fade-up-anim';
             
-            // Check if it's a service request (demo heuristic)
-            if (messageText.toLowerCase().includes('ac') || messageText.toLowerCase().includes('urgent')) {
-                this.runTrace();
-            } else {
-                const agentBubble = document.createElement('div');
-                agentBubble.className = 'chat-bubble agent-bubble fade-up-anim';
-                agentBubble.innerHTML = `
+            let content = '';
+            if (res.intent) {
+                content += `
                     <div class="intent-card">
-                        <p><strong>Intent:</strong> General Query</p>
-                        <p><strong>Status:</strong> Detected</p>
+                        <p><strong>Intent:</strong> ${res.intent.service_label}</p>
+                        <p><strong>Urgency:</strong> <span class="badge ${res.intent.urgency === 'normal' ? '' : 'badge-error'}">${res.intent.urgency}</span></p>
                     </div>
-                    Mai aapki kya madad kar sakta hoon? Aap koi service book karna chahtay hain?
                 `;
-                chatContainer.insertBefore(agentBubble, typingIndicator);
-                chatContainer.scrollTop = chatContainer.scrollHeight;
             }
-        }, 1500);
+            content += res.message;
+            agentBubble.innerHTML = content;
+            
+            chatContainer.insertBefore(agentBubble, typingIndicator);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+
+            // 5. Handle Next Steps
+            if (res.next_step === 'khoji_search') {
+                setTimeout(() => {
+                    // Use live trace polling if session_id available
+                    if (this.sessionId) {
+                        this.pollLiveTrace(this.sessionId, () => {
+                            this.navigate('chat-screen');
+                            this.searchProviders(res.intent);
+                        });
+                    } else {
+                        this.runTrace(res.session_state?.workplan || [], () => {
+                            this.searchProviders(res.intent);
+                        });
+                    }
+                }, 1000);
+            }
+        } catch (error) {
+            typingIndicator.style.display = 'none';
+            this.addAgentResponse("Maazrat! System mein koi masla aa gaya hai. (Error connecting to backend)");
+        }
     },
 
     // Agent Trace Simulation (F6)
-    runTrace() {
+    runTrace(workplan = [], onComplete = null) {
         this.navigate('trace-screen');
         const traceLogs = document.getElementById('trace-logs');
         const traceStatus = document.getElementById('trace-status');
         traceLogs.innerHTML = ''; // Clear previous
         
-        const steps = [
-            { agent: 'Zuban', icon: '🔍', msg: 'Parsing your request...', time: '400ms', type: 'in-progress' },
-            { agent: 'Zuban', icon: '✅', msg: 'Service: AC Technician | Location: G-13<br>Time: Tomorrow 10:00 AM', time: '800ms', type: 'success' },
-            { agent: 'Khoji', icon: '📡', msg: 'Searching providers in G-13...', time: '600ms', type: 'in-progress' },
-            { agent: 'Khoji', icon: '📊', msg: 'Found 4 providers. Applying 6-factor ranking...', time: '800ms', type: 'success' },
-            { agent: 'Khoji', icon: '🏆', msg: 'Selected: Ali AC Services — 2.1km | ⭐4.8', time: '600ms', type: 'success' },
-            { agent: 'Jadwal', icon: '🗓️', msg: 'Checking schedule for 10:00 AM slot...', time: '500ms', type: 'in-progress' },
-            { agent: 'Jadwal', icon: '✅', msg: 'Slot available. No conflicts.', time: '400ms', type: 'success' },
-            { agent: 'Qeemat', icon: '💰', msg: 'Calculating price... Final: PKR 1,438', time: '500ms', type: 'success' },
-            { agent: 'Meezan', icon: '📋', msg: 'Creating booking...', time: '400ms', type: 'in-progress' },
-            { agent: 'Meezan', icon: '✅', msg: 'Booking confirmed — XIDMAT-2847', time: '400ms', type: 'success' },
-            { agent: 'Meezan', icon: '🔔', msg: 'Reminder set for 09:00 AM (1 hour before)', time: '300ms', type: 'success' }
-        ];
+        // Define standard icons/labels for agents
+        const agentMeta = {
+            'Munsif': { icon: '🧠', label: 'Munsif' },
+            'Zuban': { icon: '🔍', label: 'Zuban' },
+            'Khoji': { icon: '📡', label: 'Khoji' },
+            'Jadwal': { icon: '🗓️', label: 'Jadwal' },
+            'Qeemat': { icon: '💰', label: 'Qeemat' },
+            'Meezan': { icon: '📋', label: 'Meezan' },
+            'Insaf': { icon: '⚖️', label: 'Insaf' }
+        };
+
+        const steps = workplan.map(step => ({
+            agent: step.agent,
+            icon: agentMeta[step.agent]?.icon || '🤖',
+            msg: step.action + (step.error ? `: <span style="color:red">${step.error}</span>` : ''),
+            time: '300ms',
+            type: step.error ? 'warning' : 'success'
+        }));
 
         let currentStep = 0;
 
         const renderStep = () => {
             if (currentStep >= steps.length) {
-                traceStatus.innerHTML = `<span>✅ All processes complete.</span>`;
+                traceStatus.innerHTML = `<span>✅ Processing complete.</span>`;
                 const doneBtn = document.createElement('button');
                 doneBtn.className = 'trace-done-btn fade-up-anim';
                 doneBtn.style.display = 'block';
-                doneBtn.textContent = 'View Booking Confirmation';
+                doneBtn.textContent = onComplete ? 'Continue' : 'Back to Home';
                 doneBtn.onclick = () => {
-                    this.navigate('confirmation-screen');
+                    if (onComplete) onComplete();
+                    else this.navigate('home-screen');
                 };
                 traceLogs.appendChild(doneBtn);
                 traceLogs.scrollTop = traceLogs.scrollHeight;
@@ -213,8 +540,7 @@ const app = {
             traceLogs.scrollTop = traceLogs.scrollHeight;
 
             currentStep++;
-            const delay = parseInt(step.time) || 500;
-            setTimeout(renderStep, delay + 200);
+            setTimeout(renderStep, 400);
         };
 
         setTimeout(renderStep, 500);
@@ -223,26 +549,119 @@ const app = {
     // Service Lifecycle Simulation (F7)
     startTrackingSimulation() {
         this.navigate('tracking-screen');
+        this.initMap();
+
+        // Update booking status to en-route in backend
+        if (this.currentBooking?.booking_id) {
+            this.callAPI('/track', 'POST', {
+                booking_id: this.currentBooking.booking_id,
+                status: 'EN_ROUTE'
+            }).catch(e => console.warn('Track update failed:', e));
+        }
         
-        // Simulating the 30-second demo status cycle
         console.log("Starting en-route simulation...");
         
+        // Remove old finish-btn if exists
+        const oldBtn = document.getElementById('finish-btn');
+        if (oldBtn) oldBtn.remove();
+
+        // Update arrival est progressively
+        const arrivalEst = document.querySelector('.arrival-est h2');
+        const statusMsg = document.querySelector('.status-msg');
+        
         setTimeout(() => {
-            document.querySelector('.arrival-est h2').textContent = "5 Minutes";
-            document.querySelector('.status-msg').textContent = "Ustad is turning onto your street.";
+            if (arrivalEst) arrivalEst.textContent = "7 Minutes";
+            if (statusMsg) statusMsg.textContent = "Ustad is on the way to your location.";
+        }, 2000);
+
+        setTimeout(() => {
+            if (arrivalEst) arrivalEst.textContent = "5 Minutes";
+            if (statusMsg) statusMsg.textContent = "Ustad is turning onto your street.";
         }, 5000);
 
         setTimeout(() => {
-            document.querySelector('.arrival-est h2').textContent = "Arrived";
-            document.querySelector('.status-msg').textContent = "Provider is outside. Please meet them.";
+            if (arrivalEst) arrivalEst.textContent = "Arrived";
+            if (statusMsg) statusMsg.textContent = "Provider is outside. Please meet them.";
             
+            // Update backend status to arrived
+            if (this.currentBooking?.booking_id) {
+                this.callAPI('/track', 'POST', {
+                    booking_id: this.currentBooking.booking_id,
+                    status: 'ARRIVED'
+                }).catch(e => console.warn('Track update failed:', e));
+            }
+
             // Add a button to simulate completion
-            const finishBtn = document.createElement('button');
-            finishBtn.className = 'btn-primary mt-4 fade-up-anim';
-            finishBtn.textContent = 'Simulate Work Completion';
-            finishBtn.onclick = () => this.navigate('feedback-screen');
-            document.querySelector('.tracking-info-card').appendChild(finishBtn);
+            const infoCard = document.querySelector('.tracking-info-card');
+            if (!document.getElementById('finish-btn')) {
+                const finishBtn = document.createElement('button');
+                finishBtn.id = 'finish-btn';
+                finishBtn.className = 'btn-primary mt-4 fade-up-anim';
+                finishBtn.textContent = 'Simulate Work Completion';
+                finishBtn.onclick = () => {
+                    // Update backend status to completed
+                    if (this.currentBooking?.booking_id) {
+                        this.callAPI('/track', 'POST', {
+                            booking_id: this.currentBooking.booking_id,
+                            status: 'COMPLETED'
+                        }).catch(e => console.warn('Track update failed:', e));
+                    }
+                    this.navigate('feedback-screen');
+                    // Ensure correct price on feedback screen
+                    const priceEl = document.querySelector('.final-invoice strong');
+                    if (priceEl && this.currentBooking?.final_price) {
+                        priceEl.textContent = `PKR ${this.currentBooking.final_price.toLocaleString()}`;
+                    }
+                };
+                infoCard.appendChild(finishBtn);
+            }
         }, 10000);
+    },
+
+    initMap() {
+        if (this.map) {
+            this.map.remove();
+        }
+        
+        // Default to Islamabad coords
+        const lat = 33.6844;
+        const lng = 73.0479;
+        
+        this.map = L.map('map').setView([lat, lng], 13);
+        
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(this.map);
+
+        // Add User Marker
+        L.marker([lat, lng]).addTo(this.map)
+            .bindPopup('You are here')
+            .openPopup();
+
+        // Add Provider Marker (offset slightly for demo)
+        const pLat = lat + 0.01;
+        const pLng = lng + 0.01;
+        const pIcon = L.divIcon({
+            html: '<i class="ph-fill ph-bicycle" style="font-size: 24px; color: #1A56DB;"></i>',
+            className: 'provider-map-icon',
+            iconSize: [24, 24]
+        });
+        
+        this.providerMarker = L.marker([pLat, pLng], { icon: pIcon }).addTo(this.map)
+            .bindPopup(this.selectedProvider?.name || 'Provider');
+            
+        // Animate provider marker towards user
+        let step = 0;
+        const interval = setInterval(() => {
+            if (step >= 100 || this.currentScreen !== 'tracking-screen') {
+                clearInterval(interval);
+                return;
+            }
+            const currentLat = pLat - (0.01 * step / 100);
+            const currentLng = pLng - (0.01 * step / 100);
+            this.providerMarker.setLatLng([currentLat, currentLng]);
+            step++;
+        }, 300);
     },
 
     // Feedback Logic (F7-C)
@@ -265,14 +684,28 @@ const app = {
         });
     },
 
-    submitFeedback() {
+    async submitFeedback() {
         const rating = this.currentRating || 5;
         const comment = document.getElementById('feedback-comment').value;
+        const onTime = document.getElementById('check-time').checked;
+        const quality = document.getElementById('check-quality').checked;
+        const clean = document.getElementById('check-clean').checked;
         
-        console.log(`Feedback submitted: ${rating} stars. Comment: ${comment}`);
-        
-        this.navigate('home-screen');
-        alert("Shukriya! Aapka feedback record kar liya gaya hai.");
+        try {
+            await this.callAPI('/feedback', 'POST', {
+                booking_id: this.currentBooking.booking_id,
+                rating: parseFloat(rating),
+                on_time: onTime,
+                quality: quality,
+                cleanliness: clean,
+                comment: comment
+            });
+            
+            this.navigate('home-screen');
+            alert("Shukriya! Aapka feedback record kar liya gaya hai.");
+        } catch (error) {
+            alert("Feedback submit karne mein masla hua.");
+        }
     },
 
     // Dispute Resolution (F8)
@@ -284,52 +717,29 @@ const app = {
         document.getElementById('dispute-modal').style.display = 'none';
     },
 
-    submitDispute() {
+    async submitDispute() {
         const type = document.getElementById('dispute-type').value;
         const desc = document.getElementById('dispute-desc').value;
         
-        this.hideDisputeModal();
-        this.navigate('trace-screen');
-        
-        const traceLogs = document.getElementById('trace-logs');
-        const traceStatus = document.getElementById('trace-status');
-        traceLogs.innerHTML = '';
-        traceStatus.innerHTML = `<span>⚖️ Insaf Agent is reviewing...</span>`;
+        try {
+            const res = await this.callAPI('/dispute', 'POST', {
+                booking_id: this.currentBooking?.booking_id || 1,
+                issue_type: type,
+                description: desc
+            });
 
-        const steps = [
-            { agent: 'Insaf', icon: '⚖️', msg: `Dispute received: ${type}`, time: '500ms', type: 'in-progress' },
-            { agent: 'Insaf', icon: '🔍', msg: 'Confirmed price: PKR 1,438 | Claimed charge: PKR 2,000', time: '800ms', type: 'warning' },
-            { agent: 'Insaf', icon: '📋', msg: `Classification: ${type} — difference = PKR 562`, time: '600ms', type: 'success' },
-            { agent: 'Insaf', icon: '✅', msg: 'Resolution: Partial refund of PKR 562 recommended', time: '700ms', type: 'success' },
-            { agent: 'Insaf', icon: '⚠️', msg: 'Provider penalty: -0.20 rating impact applied', time: '400ms', type: 'warning' }
-        ];
-
-        let currentStep = 0;
-        const renderStep = () => {
-            if (currentStep >= steps.length) {
-                traceStatus.innerHTML = `<span>✅ Dispute Resolved.</span>`;
-                const homeBtn = document.createElement('button');
-                homeBtn.className = 'trace-done-btn fade-up-anim';
-                homeBtn.style.display = 'block';
-                homeBtn.textContent = 'Back to Home';
-                homeBtn.onclick = () => this.navigate('home-screen');
-                traceLogs.appendChild(homeBtn);
-                return;
-            }
-
-            const step = steps[currentStep];
-            const stepEl = document.createElement('div');
-            stepEl.className = `trace-step ${step.type}`;
-            stepEl.innerHTML = `
-                <div class="trace-icon">${step.icon}</div>
-                <div class="trace-agent">[${step.agent}]</div>
-                <div class="trace-msg">${step.msg}</div>
-            `;
-            traceLogs.appendChild(stepEl);
-            currentStep++;
-            setTimeout(renderStep, 800);
-        };
-        renderStep();
+            this.hideDisputeModal();
+            // Use runTrace with correct workplan format
+            const disputeWorkplan = [
+                { agent: 'Insaf', action: `Dispute received: ${type.replace(/_/g,' ')}` },
+                { agent: 'Insaf', action: `Classification: ${type}` },
+                { agent: 'Insaf', action: `Resolution: ${res.resolution}` },
+                { agent: 'Insaf', action: `Status: ${res.status || 'resolved'}` }
+            ];
+            this.runTrace(disputeWorkplan, () => this.navigate('home-screen'));
+        } catch (error) {
+            alert("Dispute submit karne mein masla hua.");
+        }
     },
 
     addAgentResponse(text) {

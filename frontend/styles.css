@@ -63,6 +63,45 @@ p { line-height: 1.5; font-size: 16px; }
     border-radius: var(--radius-md);
 }
 
+.provider-option-card {
+    padding: 12px;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.provider-option-card:hover {
+    transform: translateY(-2px);
+    border-color: var(--primary);
+}
+
+.provider-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.avatar-sm {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+}
+
+.provider-info {
+    flex: 1;
+}
+
+.provider-info p {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.price-tag {
+    font-weight: 700;
+    color: var(--primary);
+}
+
+.mb-2 { margin-bottom: 0.5rem; }
+
 .btn-primary {
     width: 100%;
     padding: 16px;
@@ -586,18 +625,10 @@ p { line-height: 1.5; font-size: 16px; }
     gap: 16px;
 }
 
-.tracking-map {
+.tracking-map-container {
     height: 40vh;
-    background: #E5E7EB;
-    position: relative;
-    overflow: hidden;
-}
-
-.map-placeholder {
     width: 100%;
-    height: 100%;
-    object-fit: cover;
-    opacity: 0.5;
+    z-index: 1;
 }
 
 .provider-marker {
@@ -912,3 +943,143 @@ select {
 }
 
 .text-center { text-align: center; }
+
+/* ==================== HOME BOOKING LIST ==================== */
+.section-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-main);
+    margin-bottom: 12px;
+}
+
+.booking-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding-bottom: 140px; /* space above pinned CTA */
+}
+
+.booking-list-item {
+    padding: 14px 16px;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.booking-list-item:active {
+    transform: scale(0.98);
+}
+
+.booking-item-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.booking-item-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: rgba(26, 86, 219, 0.1);
+    color: var(--primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    flex-shrink: 0;
+}
+
+.booking-item-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.booking-item-info strong {
+    font-size: 0.95rem;
+    display: block;
+    margin-bottom: 2px;
+}
+
+.booking-item-info p {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.booking-item-price {
+    font-weight: 700;
+    color: var(--primary);
+    font-size: 0.9rem;
+    flex-shrink: 0;
+}
+
+/* Status Badges */
+.status-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: var(--radius-pill);
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.status-confirmed  { background: rgba(14, 159, 110, 0.1); color: #0E9F6E; }
+.status-en_route   { background: rgba(26, 86, 219, 0.1); color: var(--primary); }
+.status-arrived    { background: rgba(245, 158, 11, 0.1); color: #D97706; }
+.status-completed  { background: rgba(14, 159, 110, 0.15); color: #065F46; }
+.status-cancelled  { background: rgba(224, 36, 36, 0.1); color: var(--accent-error); }
+.status-pending    { background: rgba(107, 114, 128, 0.1); color: var(--text-muted); }
+
+/* Auth screen tweaks */
+.auth-container { padding: 60px 32px 40px; }
+.auth-header { margin-bottom: 48px; text-align: center; }
+.auth-header h2 { font-size: 1.8rem; }
+.auth-header p { color: var(--text-muted); margin-top: 8px; }
+.auth-form { display: flex; flex-direction: column; gap: 12px; }
+
+.input-group {
+    position: relative;
+    padding-top: 20px;
+    margin-bottom: 8px;
+}
+
+.input-group input {
+    width: 100%;
+    border: none;
+    border-bottom: 2px solid #E2E8F0;
+    padding: 8px 0;
+    font-family: inherit;
+    font-size: 1rem;
+    background: transparent;
+    outline: none;
+    transition: var(--transition);
+}
+
+.input-group input:focus { border-bottom-color: var(--primary); }
+
+.input-group label {
+    position: absolute;
+    top: 20px;
+    left: 0;
+    color: var(--text-muted);
+    font-size: 1rem;
+    pointer-events: none;
+    transition: var(--transition);
+}
+
+.input-group input:focus ~ label,
+.input-group input:not(:placeholder-shown) ~ label {
+    top: 0;
+    font-size: 0.75rem;
+    color: var(--primary);
+}
+
+.underline { display: none; } /* handled by input border */
+
+.text-muted { color: var(--text-muted); }
+

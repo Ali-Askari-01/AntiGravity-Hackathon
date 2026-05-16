@@ -52,40 +52,41 @@ class JadwalAgent:
         """
         Main entry point for Jadwal.
         """
-        print(f"\n🗓️  Checking schedule for Provider {provider_id} on {requested_start_iso}...")
+        trace = [f"Checking schedule for Provider {provider_id} on {requested_start_iso}..."]
         
         conflict, b_start, b_end = self.check_conflict(db, provider_id, requested_start_iso)
         
         if conflict:
-            print(f"⚠️  CONFLICT: Provider booked {b_start.strftime('%I:%M %p')}–{b_end.strftime('%I:%M %p')}")
-            print(f"🔄  Finding next available slots...")
+            trace.append(f"CONFLICT: Provider booked {b_start.strftime('%I:%M %p')}–{b_end.strftime('%I:%M %p')}")
+            trace.append("Finding next available slots...")
             
             next_slots = self.find_next_available_slots(db, provider_id, requested_start_iso)
             
             if not next_slots:
                 # Scenario C: Waitlist
-                print(f"📋  No slots within 24h. Adding to waitlist.")
+                trace.append("No slots within 24h. Adding to waitlist.")
                 return {
                     "status": "waitlist",
                     "message": "Maazrat, provider fully booked hain. Humne aapko waitlist mein daal diya hai.",
-                    "waitlist_enabled": True
+                    "waitlist_enabled": True,
+                    "trace": trace
                 }
             
-            print(f"✅  Available slots: {' | '.join(next_slots)}")
+            trace.append(f"Available slots: {', '.join(next_slots)}")
             return {
                 "status": "conflict",
                 "message": "Provider is waqt masroof hain. Kya aap ye slots pasand karenge?",
-                "alternatives": next_slots
+                "alternatives": next_slots,
+                "trace": trace
             }
 
         # Scenario A: Available
-        # Note: We don't write 'occupied' here yet; Meezan does that upon final confirmation.
-        # But for Jadwal's internal logic, we return success.
-        print(f"✅  Slot available.")
+        trace.append("Slot available.")
         return {
             "status": "available",
             "message": "Waqt dastyab hai.",
-            "requested_slot": requested_start_iso
+            "requested_slot": requested_start_iso,
+            "trace": trace
         }
 
     def occupy_slot(self, db: Session, provider_id: int, slot_start_iso: str):

@@ -110,7 +110,7 @@ class KhojiAgent:
         user_lat, user_lng = self._get_user_coords(location)
 
         # ── PRD Trace Log ────────────────────────────────────────────────────
-        print(f"\n📡 Searching for {service_type} in {location}...")
+        trace_lines = [f"Searching for {service_type} in {location}..."]
 
         all_providers = db.query(Provider).all()
         matched = [
@@ -119,17 +119,16 @@ class KhojiAgent:
         ]
 
         if not matched:
-            print(f"❌ No providers found for {service_type}.")
+            trace_lines.append(f"No providers found for {service_type}.")
             return {
                 "status": "failed",
                 "message": f"Maazrat, {service_type} ka koi provider available nahi mila.",
-                "trace": []
+                "trace": trace_lines
             }
 
-        print(f"📊 Found {len(matched)} providers. Applying 6-factor ranking...")
+        trace_lines.append(f"Found {len(matched)} providers. Applying 6-factor ranking...")
 
         scored = []
-        trace_lines = []
         for p in matched:
             pdict = {
                 "lat": p.lat, "lng": p.lng,
@@ -139,9 +138,7 @@ class KhojiAgent:
             score, dist_km = score_provider(pdict, user_lat, user_lng, urgency)
 
             avail_label = "YES" if p.is_available else "NO"
-            line = (f"   {p.name:<22} score={score}  dist={dist_km}km"
-                    f"  rating={p.rating}  available={avail_label}")
-            print(line)
+            line = (f"{p.name}: score={score}, dist={dist_km}km, rating={p.rating}, avail={avail_label}")
             trace_lines.append(line)
 
             scored.append({
@@ -163,7 +160,7 @@ class KhojiAgent:
 
         if top_3:
             winner = top_3[0]
-            print(f"🏆 Selected: {winner['name']} — {winner['rationale']}")
+            trace_lines.append(f"Selected: {winner['name']} — {winner['rationale']}")
 
         return {
             "status": "success",
