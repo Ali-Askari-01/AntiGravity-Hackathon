@@ -619,36 +619,38 @@ const app = {
     },
 
     initMap() {
-        if (this.map) {
-            this.map.remove();
-        }
-        
         // Default to Islamabad coords
-        const lat = 33.6844;
-        const lng = 73.0479;
+        const userLocation = { lat: 33.6844, lng: 73.0479 };
         
-        this.map = L.map('map').setView([lat, lng], 13);
-        
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap contributors'
-        }).addTo(this.map);
+        this.map = new google.maps.Map(document.getElementById("map"), {
+            zoom: 13,
+            center: userLocation,
+            disableDefaultUI: true,
+        });
 
         // Add User Marker
-        L.marker([lat, lng]).addTo(this.map)
-            .bindPopup('You are here')
-            .openPopup();
+        new google.maps.Marker({
+            position: userLocation,
+            map: this.map,
+            title: "You are here"
+        });
 
         // Add Provider Marker (offset slightly for demo)
-        const pLat = lat + 0.01;
-        const pLng = lng + 0.01;
-        const pIcon = L.divIcon({
-            html: '<i class="ph-fill ph-bicycle" style="font-size: 24px; color: #1A56DB;"></i>',
-            className: 'provider-map-icon',
-            iconSize: [24, 24]
-        });
+        let currentLat = userLocation.lat + 0.01;
+        let currentLng = userLocation.lng + 0.01;
         
-        this.providerMarker = L.marker([pLat, pLng], { icon: pIcon }).addTo(this.map)
-            .bindPopup(this.selectedProvider?.name || 'Provider');
+        this.providerMarker = new google.maps.Marker({
+            position: { lat: currentLat, lng: currentLng },
+            map: this.map,
+            title: this.selectedProvider?.name || "Provider",
+            icon: {
+                path: google.maps.SymbolPath.CIRCLE,
+                fillColor: '#1A56DB',
+                fillOpacity: 1,
+                strokeWeight: 0,
+                scale: 10
+            }
+        });
             
         // Animate provider marker towards user
         let step = 0;
@@ -657,9 +659,9 @@ const app = {
                 clearInterval(interval);
                 return;
             }
-            const currentLat = pLat - (0.01 * step / 100);
-            const currentLng = pLng - (0.01 * step / 100);
-            this.providerMarker.setLatLng([currentLat, currentLng]);
+            currentLat = (userLocation.lat + 0.01) - (0.01 * step / 100);
+            currentLng = (userLocation.lng + 0.01) - (0.01 * step / 100);
+            this.providerMarker.setPosition({ lat: currentLat, lng: currentLng });
             step++;
         }, 300);
     },

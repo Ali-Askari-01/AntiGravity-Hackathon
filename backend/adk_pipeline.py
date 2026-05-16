@@ -271,7 +271,11 @@ def apply_dispute_resolution(booking_id: int, action: str, penalty_amount: float
 # ADK AGENT DEFINITIONS
 # ══════════════════════════════════════════════════════════════════════════════
 
-_MODEL = "gemini-2.0-flash"
+_MODEL = "openrouter/google/gemini-2.5-flash"
+
+# Optional: Ensure litellm (if ADK uses it under the hood) knows about the key
+import os
+os.environ["OPENROUTER_API_KEY"] = os.getenv("OPENROUTER_API_KEY", "")
 
 zuban_agent = LlmAgent(
     name="Zuban",
