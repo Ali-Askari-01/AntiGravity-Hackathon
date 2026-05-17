@@ -411,6 +411,15 @@ def list_providers(db=Depends(get_db)):
         for p in providers
     ]
 
+@app.get("/providers/{provider_id}/optimize")
+def optimize_provider(provider_id: int, db=Depends(get_db)):
+    from backend.bonus.bonus_agent import BonusAgent
+    agent = BonusAgent()
+    result = agent.optimize_provider(db, provider_id)
+    if result.get("status") == "error":
+        raise HTTPException(status_code=404, detail=result.get("message"))
+    return result
+
 @app.get("/health")
 def health():
     return {"status": "ok", "adk_available": _adk_available,
