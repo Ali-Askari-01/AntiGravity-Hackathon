@@ -28,7 +28,7 @@ def haversine(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
 
 
 # ── PRD 6-factor scoring formula ──────────────────────────────────────────────
-def score_provider(provider: Dict[str, Any], user_lat: float, user_lng: float, urgency: str):
+def score_provider(provider: Dict[str, Any], user_lat: float, user_lng: float, urgency: str, job_complexity: str = "basic"):
     distance_km = haversine(user_lat, user_lng, provider["lat"], provider["lng"])
     max_distance = 10.0
 
@@ -39,11 +39,23 @@ def score_provider(provider: Dict[str, Any], user_lat: float, user_lng: float, u
     urgency_bonus  = 0.1 if urgency == "urgent" and provider["available"] else 0.0
     trust_score    = rating_score * 0.6 + experience * 0.4
 
+    # Job complexity bonus — prioritize experienced/rated providers for harder jobs
+    complexity_bonus = 0.0
+    if job_complexity == "intermediate":
+        if provider["experience"] >= 3:
+            complexity_bonus += 0.05
+    elif job_complexity == "complex":
+        if provider["experience"] >= 5:
+            complexity_bonus += 0.10
+        if provider["rating"] >= 4.5:
+            complexity_bonus += 0.05
+
     score = (0.35 * distance_score
              + 0.30 * trust_score
              + 0.20 * availability
              + 0.10 * experience
-             + 0.05 * urgency_bonus)
+             + 0.05 * urgency_bonus
+             + complexity_bonus)
 
     return round(score, 4), round(distance_km, 2)
 
@@ -105,6 +117,7 @@ class KhojiAgent:
         service_type: str,
         location: str,
         urgency: str = "normal",
+        job_complexity: str = "basic",
     ) -> Dict[str, Any]:
 
         user_lat, user_lng = self._get_user_coords(location)
@@ -126,7 +139,7 @@ class KhojiAgent:
                 "trace": trace_lines
             }
 
-        trace_lines.append(f"Found {len(matched)} providers. Applying 6-factor ranking...")
+        trace_lines.append(f"Found {len(matched)} providers. Applying 6-factor + complexity ranking (job_complexity={job_complexity})...")
 
         scored = []
         for p in matched:
@@ -135,7 +148,7 @@ class KhojiAgent:
                 "rating": p.rating, "available": p.is_available,
                 "experience": p.experience,
             }
-            score, dist_km = score_provider(pdict, user_lat, user_lng, urgency)
+            score, dist_km = score_provider(pdict, user_lat, user_lng, urgency, job_complexity)
 
             avail_label = "YES" if p.is_available else "NO"
             line = (f"{p.name}: score={score}, dist={dist_km}km, rating={p.rating}, avail={avail_label}")
@@ -167,7 +180,8 @@ class KhojiAgent:
             "user_location": {"lat": user_lat, "lng": user_lng},
             "total_found": len(matched),
             "top_providers": top_3,
-            "message": f"Humne {len(top_3)} behtareen providers dhoond liye hain.",
+            "job_complexity": job_complexity,
+            "message": f"Humne {len(top_3)} behtareen providers dhoond liye hain (job complexity: {job_complexity}).",
             "trace": trace_lines,
         }
 

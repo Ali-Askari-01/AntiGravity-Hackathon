@@ -148,7 +148,15 @@ def chat(user_input: UserInput):
             if step.get("tool_name") == "submit_intent":
                 intent = step.get("tool_args", {})
         
-        munsif.add_workplan_step(session_id, "System", f"Routing to Khoji for {intent.get('service_label', '')} search in {intent.get('location', '')}")
+        confidence = intent.get('confidence', 0.85)
+        job_complexity = intent.get('job_complexity', 'basic')
+        
+        munsif.add_workplan_step(session_id, "Zuban", f"Intent parsed — confidence: {confidence}, complexity: {job_complexity}")
+        
+        if confidence < 0.75:
+            munsif.add_workplan_step(session_id, "Zuban", f"⚠️ Low confidence ({confidence}) — clarification may be needed")
+        
+        munsif.add_workplan_step(session_id, "System", f"Routing to Khoji for {intent.get('service_label', '')} search in {intent.get('location', '')} (complexity: {job_complexity})")
         
         # update context
         db = SessionLocal()
@@ -161,6 +169,8 @@ def chat(user_input: UserInput):
         return {
             "message": result.get("response", ""),
             "intent": intent,
+            "confidence": confidence,
+            "job_complexity": job_complexity,
             "next_step": "khoji_search",
             "session_id": session_id,
             "session_state": munsif.get_session(session_id)

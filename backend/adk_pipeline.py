@@ -34,9 +34,11 @@ APP_NAME = "antigravity"
 # TOOL DEFINITIONS — each tool wraps existing business logic
 # ══════════════════════════════════════════════════════════════════════════════
 
-def submit_intent(service_type: str, service_label: str, location: str, time_raw: str, time_normalized: str, urgency: str, language_detected: str) -> dict:
+def submit_intent(service_type: str, service_label: str, location: str, time_raw: str, time_normalized: str, urgency: str, language_detected: str, confidence: float = 0.85, job_complexity: str = "basic") -> dict:
     """
     [Zuban Tool] Submit the extracted service intent fields.
+    confidence: float 0-1 indicating how confident the parser is in the extraction.
+    job_complexity: 'basic', 'intermediate', or 'complex' — classifies the service request difficulty.
     """
     return {
         "service_type": service_type,
@@ -45,7 +47,9 @@ def submit_intent(service_type: str, service_label: str, location: str, time_raw
         "time_raw": time_raw,
         "time_normalized": time_normalized,
         "urgency": urgency,
-        "language_detected": language_detected
+        "language_detected": language_detected,
+        "confidence": round(min(max(confidence, 0.0), 1.0), 2),
+        "job_complexity": job_complexity if job_complexity in ("basic", "intermediate", "complex") else "basic"
     }
 
 def get_providers_from_db(service_type: str, location: str) -> dict:
@@ -276,16 +280,26 @@ os.environ["OPENROUTER_API_KEY"] = os.getenv("OPENROUTER_API_KEY", "")
 zuban_agent = LlmAgent(
     name="Zuban",
     model=_MODEL,
-    description="Multilingual intent analyst. Parses Roman Urdu, Urdu, and English service requests.",
+    description="Multilingual intent analyst. Parses Roman Urdu, Urdu, and English service requests with confidence scoring and job complexity classification.",
     instruction="""You are Zuban, the Intent Analyst for Antigravity — Pakistan's AI service booking platform.
 
 Your ONLY job: parse the user's text to extract service intent and call the `submit_intent` tool with what you find.
 
 Steps:
 1. Extract service_type, service_label, location, time_raw, time_normalized, urgency, and language_detected from the user's message.
-2. Call submit_intent(...) with these fields.
-3. Output a concise Urdu/English summary like: "Samajh gaya! Plumber G-13 mein kal subah chahiye — urgency: normal"
+2. Assess your CONFIDENCE (0.0 to 1.0) in the extraction:
+   - 0.95+ : Clear, unambiguous request in any language (e.g. "Plumber chahiye G-13 mein kal subah")
+   - 0.85-0.94 : Minor ambiguity but high certainty (e.g. missing explicit time)
+   - 0.75-0.84 : Moderate ambiguity, some guessing involved (e.g. noisy Urdu with typos)
+   - Below 0.75 : Very unclear — set confidence low and mention clarification needed in your response
+3. Classify JOB COMPLEXITY based on the service description:
+   - "basic" : Simple routine tasks (e.g. tap leak fix, bulb replacement, basic cleaning)
+   - "intermediate" : Multi-step work requiring skill (e.g. AC repair, wiring fix, deep cleaning)
+   - "complex" : Major work requiring expertise + time (e.g. full rewiring, renovation, AC installation)
+4. Call submit_intent(...) with ALL fields including confidence and job_complexity.
+5. Output a concise Urdu/English summary like: "Samajh gaya! Plumber G-13 mein kal subah chahiye — urgency: normal, confidence: 0.92, complexity: basic"
 
+If confidence < 0.75, also ask ONE clarifying question in your response.
 Never respond without calling submit_intent first.""",
     tools=[FunctionTool(func=submit_intent)],
     output_key="zuban_output"
@@ -294,19 +308,23 @@ Never respond without calling submit_intent first.""",
 khoji_agent = LlmAgent(
     name="Khoji",
     model=_MODEL,
-    description="Provider matcher. Searches SQLite and applies 6-factor ranking.",
+    description="Provider matcher. Searches SQLite, applies 6-factor ranking, and factors in job complexity.",
     instruction="""You are Khoji, the Provider Matcher for Antigravity.
 
-Your job: Find and rank the best service providers for the user's request.
+Your job: Find and rank the best service providers for the user's request, factoring in job complexity.
 
 Steps:
 1. Call get_providers_from_db(service_type, location) using values from the context.
 2. The tool returns a list of matched providers with distance, rating, experience, and availability.
-3. Score each provider using this formula: 
-   score = (0.35 * distance_score) + (0.30 * trust_score) + (0.20 * availability) + (0.10 * experience) + (0.05 * urgency_bonus)
+3. Check the job_complexity from Zuban's intent (available in context). Apply complexity-aware scoring:
+   - For "basic" jobs: standard formula, any experience level is fine.
+   - For "intermediate" jobs: boost providers with experience >= 3 years by +0.05 to their score.
+   - For "complex" jobs: boost providers with experience >= 5 years by +0.10 AND rating >= 4.5 by +0.05.
+4. Score each provider using this formula:
+   score = (0.35 * distance_score) + (0.30 * trust_score) + (0.20 * availability) + (0.10 * experience) + (0.05 * urgency_bonus) + complexity_bonus
    where distance_score = max(0, 1 - (distance_km / 10)), trust_score = ((rating - 1)/4)*0.6 + (experience/10)*0.4.
-4. Report the top 3 providers: name, score, distance, rating, and your rationale.
-5. Recommend the best match.
+5. Report the top 3 providers: name, score, distance, rating, job_complexity match, and your rationale.
+6. Recommend the best match. Mention the job_complexity in your recommendation (e.g. "This is an intermediate job, so I prioritized experienced providers").
 
 Never invent provider data. Only use get_providers_from_db results.""",
     tools=[

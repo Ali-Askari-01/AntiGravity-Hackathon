@@ -448,12 +448,21 @@ const app = {
             
             let content = '';
             if (res.intent) {
+                const conf = res.confidence || res.intent.confidence || 0.85;
+                const complexity = res.job_complexity || res.intent.job_complexity || 'basic';
+                const confColor = conf >= 0.9 ? 'text-green' : conf >= 0.75 ? 'text-yellow' : 'badge-error';
+                const complexityLabel = complexity.charAt(0).toUpperCase() + complexity.slice(1);
                 content += `
                     <div class="intent-card">
                         <p><strong>Intent:</strong> ${res.intent.service_label}</p>
                         <p><strong>Urgency:</strong> <span class="badge ${res.intent.urgency === 'normal' ? '' : 'badge-error'}">${res.intent.urgency}</span></p>
+                        <p><strong>Confidence:</strong> <span class="${confColor}">${(conf * 100).toFixed(0)}%</span></p>
+                        <p><strong>Complexity:</strong> <span class="badge">${complexityLabel}</span></p>
                     </div>
                 `;
+                if (conf < 0.75) {
+                    content += `<p style="color:var(--accent-warning);font-size:0.85rem;">⚠️ Low confidence — please clarify your request.</p>`;
+                }
             }
             content += res.message;
             agentBubble.innerHTML = content;

@@ -16,15 +16,29 @@ SYSTEM_PROMPT = """You are Zuban, a multilingual intent extraction agent for a P
 Extract service requests from Roman Urdu, Urdu, or English text.
 Return ONLY valid JSON. No preamble. No markdown. No explanation.
 
+You MUST include two additional fields:
+- "confidence": a float from 0.0 to 1.0 indicating how confident you are in your extraction.
+  - 0.95+: Clear, unambiguous request
+  - 0.85-0.94: Minor ambiguity (e.g. missing time)
+  - 0.75-0.84: Moderate ambiguity (noisy text, typos)
+  - Below 0.75: Very unclear input
+- "job_complexity": one of "basic", "intermediate", or "complex"
+  - "basic": Simple routine tasks (tap leak, bulb change, basic cleaning)
+  - "intermediate": Multi-step skilled work (AC repair, wiring fix, deep cleaning)
+  - "complex": Major expert work (full rewiring, renovation, AC installation)
+
 Examples:
 Input: "Mujhe kal subah DHA mein plumber chahiye"
-Output: {"service_type":"plumber","service_label":"Plumber","location":"DHA","time_raw":"kal subah","time_normalized":"2026-05-22T09:00:00","urgency":"normal","language_detected":"roman_urdu"}
+Output: {"service_type":"plumber","service_label":"Plumber","location":"DHA","time_raw":"kal subah","time_normalized":"2026-05-22T09:00:00","urgency":"normal","language_detected":"roman_urdu","confidence":0.95,"job_complexity":"basic"}
 
 Input: "urgent electrician needed in Gulshan right now"
-Output: {"service_type":"electrician","service_label":"Electrician","location":"Gulshan","time_raw":"right now","time_normalized":"2026-05-21T10:00:00","urgency":"urgent","language_detected":"english"}
+Output: {"service_type":"electrician","service_label":"Electrician","location":"Gulshan","time_raw":"right now","time_normalized":"2026-05-21T10:00:00","urgency":"urgent","language_detected":"english","confidence":0.93,"job_complexity":"intermediate"}
 
 Input: "AC theek karwana hai Clifton mein, parso"
-Output: {"service_type":"ac_technician","service_label":"AC Technician","location":"Clifton","time_raw":"parso","time_normalized":"2026-05-23T10:00:00","urgency":"normal","language_detected":"roman_urdu"}
+Output: {"service_type":"ac_technician","service_label":"AC Technician","location":"Clifton","time_raw":"parso","time_normalized":"2026-05-23T10:00:00","urgency":"normal","language_detected":"roman_urdu","confidence":0.92,"job_complexity":"intermediate"}
+
+Input: "pura ghar ki wiring krwani hai F-10 mein"
+Output: {"service_type":"electrician","service_label":"Electrician","location":"F-10","time_raw":"not specified","time_normalized":"2026-05-22T10:00:00","urgency":"normal","language_detected":"roman_urdu","confidence":0.88,"job_complexity":"complex"}
 """
 
 class IntentResponse(BaseModel):
@@ -35,6 +49,8 @@ class IntentResponse(BaseModel):
     time_normalized: str
     urgency: str
     language_detected: str
+    confidence: float = 0.85
+    job_complexity: str = "basic"
 
 class ZubanAgent:
     def __init__(self):
@@ -102,6 +118,24 @@ class ZubanAgent:
                 selected_loc = loc.upper()
                 break
         
+        # Determine job complexity from keywords
+        complex_keywords = ["pura", "full", "complete", "renovation", "installation", "install", "new"]
+        intermediate_keywords = ["repair", "fix", "theek", "deep", "service", "leak", "tapak", "cool"]
+        
+        job_complexity = "basic"
+        for kw in complex_keywords:
+            if kw in text:
+                job_complexity = "complex"
+                break
+        if job_complexity == "basic":
+            for kw in intermediate_keywords:
+                if kw in text:
+                    job_complexity = "intermediate"
+                    break
+
+        # Confidence: fallback is inherently less certain
+        confidence = 0.72 if selected_service[0] == "general" else 0.78
+
         return IntentResponse(
             service_type=selected_service[0],
             service_label=selected_service[1],
@@ -109,7 +143,9 @@ class ZubanAgent:
             time_raw="As soon as possible",
             time_normalized=datetime.now().isoformat(),
             urgency="urgent" if "urgent" in text or "emergency" in text or "fauri" in text else "normal",
-            language_detected="detected_via_fallback"
+            language_detected="detected_via_fallback",
+            confidence=confidence,
+            job_complexity=job_complexity
         )
 
     def _call_llm(self, prompt: str) -> IntentResponse:
