@@ -24,6 +24,11 @@ class Provider(Base):
     base_price = Column(Float)
     workload = Column(Integer, default=0)
     is_available = Column(Boolean, default=True)
+    cancellation_rate = Column(Float, default=0.0)
+    on_time_score = Column(Float, default=1.0)
+    review_count = Column(Integer, default=0)
+    skill_level = Column(Integer, default=1)
+    capacity = Column(Integer, default=5)
 
 class Booking(Base):
     __tablename__ = "bookings"

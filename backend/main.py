@@ -284,11 +284,21 @@ def create_booking(req: BookingRequest, db=Depends(get_db)):
             req.session_id, req.provider_id, req.urgency, req.distance_km, False
         )
         _push_trace(req.session_id, qeemat_result.get("trace", []))
-        munsif.add_workplan_step(req.session_id, "System", "Routing to Meezan for booking execution...")
+        
+        # Extract price from Qeemat response
+        import re
+        price = None
+        price_match = re.search(r"Final price: PKR ([\d,]+)", qeemat_result.get("response", ""))
+        if price_match:
+            price_str = price_match.group(1).replace(",", "")
+            price = float(price_str)
+            
+        munsif.add_workplan_step(req.session_id, "System", f"Routing to Meezan for booking execution with price {price}...")
         
         meezan_result = adk.run_meezan(
             req.session_id, req.provider_id, req.service_type,
-            req.location, req.distance_km, req.urgency, req.confirmed_slot
+            req.location, req.distance_km, req.urgency, req.confirmed_slot,
+            price=price
         )
         _push_trace(req.session_id, meezan_result.get("trace", []))
         
@@ -337,16 +347,31 @@ def submit_feedback(req: FeedbackRequest, db=Depends(get_db)):
         b = db.query(models.Booking).filter(models.Booking.id == req.booking_id).first()
         if not b: raise HTTPException(status_code=404, detail="Booking not found")
         
+        # 1. Create Feedback record
+        feedback = models.Feedback(
+            booking_id=req.booking_id,
+            provider_id=b.provider_id,
+            rating=req.rating,
+            arrived_on_time=req.on_time,
+            work_quality=req.quality,
+            cleanliness=req.cleanliness,
+            comment=req.comment
+        )
+        db.add(feedback)
+        
         p = db.query(models.Provider).filter(models.Provider.id == b.provider_id).first()
         if p:
-            # simple average
+            # 2. Weighted rolling average
             current_rating = p.rating or 5.0
-            p.rating = round((current_rating + req.rating) / 2, 2)
+            review_count = p.review_count or 0
+            p.rating = round((current_rating * review_count + req.rating) / (review_count + 1), 2)
+            p.review_count = review_count + 1
             
         b.status = "completed"
         db.commit()
         return {"status": "success", "message": "Shukriya! Feedback mil gaya."}
     except Exception as e:
+        db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
 
 

@@ -72,7 +72,7 @@ Open `frontend/index.html` in your browser or use a live server extension in VSC
 ---
 
 ## 💾 Database Seeding
-The project comes with a pre-populated SQLite database (`antigravity.db`) containing mock service providers across Islamabad sectors (G-13, F-10, etc.) and their schedules. To re-seed or wipe the database, run:
+The project comes with a pre-populated SQLite database (`antigravity.db`) containing mock service providers across Karachi areas (DHA, Gulshan, Clifton, etc.) with precise coordinates and their schedules. To re-seed or wipe the database, run:
 ```bash
 cd backend
 python seed_providers.py

@@ -23,7 +23,7 @@ from google.adk.agents import LlmAgent, SequentialAgent
 from google.adk.tools import FunctionTool
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
-from google.adk import types
+from types import SimpleNamespace
 
 # ── Shared in-memory ADK session service ──────────────────────────────────────
 _session_service = InMemorySessionService()
@@ -66,16 +66,28 @@ def get_providers_from_db(service_type: str, location: str) -> dict:
         return R * 2 * math.asin(math.sqrt(a))
 
     # Simulate Geocoding
+    # Fixed coordinates for Karachi areas
     SECTOR_COORDS = {
-        "g-13": (33.6938, 72.9797), "g13": (33.6938, 72.9797),
-        "g-11": (33.6844, 73.0064), "g-10": (33.6892, 73.0189),
-        "f-10": (33.7078, 73.0209), "f-6":  (33.7294, 73.0909),
-        "f-7":  (33.7240, 73.0788), "f-8":  (33.7203, 73.0627),
-        "i-8":  (33.6748, 73.0565), "i-9":  (33.6613, 73.0468),
-        "dha":  (33.5651, 73.1651), "gulshan": (33.6844, 73.0950),
+        "dha": (24.8110, 67.0700),
+        "dha phase 5": (24.8110, 67.0700),
+        "gulshan": (24.9220, 67.0940),
+        "gulshan-e-iqbal": (24.9220, 67.0940),
         "clifton": (24.8138, 67.0300),
+        "pechs": (24.8700, 67.0450),
+        "north nazimabad": (24.9435, 67.0430),
+        "fb area": (24.9355, 67.0605),
+        "gulistan-e-johar": (24.9065, 67.1180),
+        "korangi": (24.8275, 67.1280),
+        "malir": (24.8920, 67.1940),
+        "landhi": (24.8545, 67.1635),
+        "saddar": (24.8610, 67.0100),
+        "lyari": (24.8670, 67.0040),
+        "nazimabad": (24.9190, 67.0350),
+        "orangi town": (24.9560, 67.0050),
+        "site area": (24.8885, 66.9955),
     }
-    user_lat, user_lng = SECTOR_COORDS.get(location.lower().strip(), (33.6844, 73.0479))
+    
+    user_lat, user_lng = SECTOR_COORDS.get(location.lower().strip(), (24.8610, 67.0100)) # Default to Saddar
 
     db = SessionLocal()
     try:
@@ -172,7 +184,7 @@ def get_provider_pricing_details(provider_id: int) -> dict:
 
 def create_booking(session_id: str, provider_id: int, service_type: str,
                    location: str, distance_km: float,
-                   urgency: str, confirmed_slot: str) -> dict:
+                   urgency: str, confirmed_slot: str, price: float = None) -> dict:
     """
     [Meezan Tool] Insert a confirmed booking into SQLite.
     Returns: booking_id, confirmation_code, provider_name.
@@ -198,7 +210,8 @@ def create_booking(session_id: str, provider_id: int, service_type: str,
             distance_km=distance_km,
             urgency=urgency,
             scheduled_time=confirmed_slot,
-            confirmation_code=code
+            confirmation_code=code,
+            price=price
         )
         db.add(booking)
         
@@ -247,22 +260,38 @@ def fetch_booking_details(booking_id: int) -> dict:
     finally:
         db.close()
 
-def apply_dispute_resolution(booking_id: int, action: str, penalty_amount: float = 0.0, new_rating: float = None) -> dict:
+def apply_dispute_resolution(booking_id: int, action: str, penalty_amount: float = 0.0, new_rating: float = None, issue_type: str = None, description: str = None, resolution_text: str = None) -> dict:
     """
     [Insaf Tool] Apply the resolution to the database.
     """
     from backend.database import SessionLocal
-    from backend.models import Booking, Provider
+    from backend.models import Booking, Provider, Dispute
+    
     db = SessionLocal()
     try:
         b = db.query(Booking).filter(Booking.id == booking_id).first()
         if not b: return {"error": "Booking not found"}
+        
         b.status = f"disputed_resolved_{action}"
         if new_rating and b.provider_id:
             p = db.query(Provider).filter(Provider.id == b.provider_id).first()
             if p: p.rating = new_rating
+            
+        # Log Dispute in DB
+        dispute = Dispute(
+            booking_id=booking_id,
+            issue_type=issue_type or "unknown",
+            description=description or "",
+            resolution=resolution_text or action,
+            status="RESOLVED"
+        )
+        db.add(dispute)
+        
         db.commit()
         return {"status": "success", "action_applied": action}
+    except Exception as e:
+        db.rollback()
+        return {"error": str(e)}
     finally:
         db.close()
 
@@ -370,14 +399,14 @@ meezan_agent = LlmAgent(
     model=_MODEL,
     description="Booking executor. Creates DB record and generates confirmation code.",
     instruction="""You are Meezan, the Booking Executor for Antigravity.
-
+ 
 Your job: Finalize the booking and generate the confirmation.
-
+ 
 Steps:
-1. Call create_booking(session_id, provider_id, service_type, location, distance_km, urgency, confirmed_slot)
+1. Call create_booking(session_id, provider_id, service_type, location, distance_km, urgency, confirmed_slot, price)
 2. Call generate_reminder(provider_name, confirmed_slot)
 3. Present the full receipt: confirmation code, provider name, slot, and reminder.
-
+ 
 Always call create_booking first. Never confirm a booking without the tool result.""",
     tools=[
         FunctionTool(func=create_booking),
@@ -391,15 +420,15 @@ insaf_agent = LlmAgent(
     model=_MODEL,
     description="Dispute resolution agent. Classifies issues and applies provider penalties.",
     instruction="""You are Insaf, the Dispute Resolution agent for Antigravity.
-
+ 
 Your job: Handle service complaints fairly and transparently.
-
+ 
 Steps:
 1. Call fetch_booking_details(booking_id) to get context.
 2. Based on the issue_type and description, determine a resolution (e.g., refund, provider warning).
-3. Call apply_dispute_resolution(booking_id, action, penalty_amount, new_rating) to apply it.
+3. Call apply_dispute_resolution(booking_id, action, penalty_amount, new_rating, issue_type, description, resolution_text) to apply it. Pass the original issue_type and description, and set resolution_text to your explanation of the resolution.
 4. Explain the classification and resolution in empathetic Urdu/English.
-
+ 
 Never make up resolutions without applying them via the tool.""",
     tools=[
         FunctionTool(func=fetch_booking_details),
@@ -455,7 +484,7 @@ def _get_final_text(events: list) -> str:
 async def _run_agent_async(agent: LlmAgent, adk_session_id: str, message_text: str) -> dict:
     """Run a single ADK agent and return trace + final response text."""
     runner = Runner(agent=agent, app_name=APP_NAME, session_service=_session_service)
-    message = types.Content(role="user", parts=[types.Part(text=message_text)])
+    message = SimpleNamespace(role="user", parts=[SimpleNamespace(text=message_text)])
     events = []
     async for event in runner.run_async(
         user_id="antigravity_user",
@@ -485,16 +514,36 @@ def _run_agent(agent: LlmAgent, adk_session_id: str, message_text: str) -> dict:
         return {"trace": [{"agent": agent.name, "action": f"Error: {str(e)}"}], "response": ""}
 
 
-def ensure_adk_session(adk_session_id: str):
-    """Create an ADK session if it doesn't exist yet."""
+async def _ensure_adk_session_async(adk_session_id: str):
+    """Async implementation to ensure ADK session."""
     try:
-        _session_service.get_session(
+        await _session_service.get_session(
             app_name=APP_NAME, user_id="antigravity_user", session_id=adk_session_id
         )
     except Exception:
-        _session_service.create_session(
+        await _session_service.create_session(
             app_name=APP_NAME, user_id="antigravity_user", session_id=adk_session_id
         )
+
+def ensure_adk_session(adk_session_id: str):
+    """Create an ADK session if it doesn't exist yet."""
+    try:
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            # No event loop in this thread
+            asyncio.run(_ensure_adk_session_async(adk_session_id))
+            return
+
+        if loop.is_running():
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                future = pool.submit(asyncio.run, _ensure_adk_session_async(adk_session_id))
+                return future.result(timeout=10)
+        else:
+            return loop.run_until_complete(_ensure_adk_session_async(adk_session_id))
+    except Exception as e:
+        logger.error(f"ensure_adk_session failed: {e}")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -532,12 +581,12 @@ def run_qeemat(session_id: str, provider_id: int, urgency: str,
 
 
 def run_meezan(session_id: str, provider_id: int, service_type: str,
-               location: str, distance_km: float, urgency: str, confirmed_slot: str) -> dict:
+               location: str, distance_km: float, urgency: str, confirmed_slot: str, price: float = None) -> dict:
     """Run Meezan agent to execute booking."""
     ensure_adk_session(session_id)
     msg = (f"Create booking: session_id='{session_id}', provider_id={provider_id}, "
            f"service_type='{service_type}', location='{location}', "
-           f"distance_km={distance_km}, urgency='{urgency}', confirmed_slot='{confirmed_slot}'")
+           f"distance_km={distance_km}, urgency='{urgency}', confirmed_slot='{confirmed_slot}', price={price}")
     return _run_agent(meezan_agent, session_id, msg)
 
 
