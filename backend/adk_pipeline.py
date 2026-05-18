@@ -199,19 +199,30 @@ def create_booking(session_id: str, provider_id: int, service_type: str,
         provider = db.query(Provider).filter(Provider.id == provider_id).first()
         if not provider:
             return {"error": "Provider not found"}
-            
+
+        # Calculate price inline so it's never None
+        base = provider.base_price or 0.0
+        urgency_surcharge = 500.0 if urgency == "urgent" else 0.0
+        distance_fee = distance_km * 50.0
+        quality_premium = 200.0 if (provider.rating or 0) >= 4.5 else 0.0
+        experience_factor = (provider.experience or 0) * 100.0
+        calculated_price = round(base + urgency_surcharge + distance_fee + quality_premium + experience_factor, 2)
+        price_breakdown = (
+            f"Base: PKR {base} | Urgency: PKR {urgency_surcharge} | "
+            f"Distance: PKR {distance_fee} | Quality: PKR {quality_premium} | "
+            f"Experience: PKR {experience_factor} | Total: PKR {calculated_price}"
+        )
+
         code = f"XIDMAT-{random.randint(1000, 9999)}"
         booking = Booking(
-            user_id="user_123",
+            session_id=session_id,
             provider_id=provider_id,
             service_type=service_type,
             status="confirmed",
-            location=location,
-            distance_km=distance_km,
-            urgency=urgency,
-            scheduled_time=confirmed_slot,
+            confirmed_slot=confirmed_slot,
             confirmation_code=code,
-            price=price
+            price=calculated_price,
+            price_breakdown=price_breakdown,
         )
         db.add(booking)
         

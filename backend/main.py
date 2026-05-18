@@ -262,10 +262,36 @@ def get_pricing(req: PricingRequest, db=Depends(get_db)):
 
     session_id = f"price_{req.provider_id}_{datetime.datetime.now().timestamp()}"
     adk_result = adk.run_qeemat(session_id, req.provider_id, req.urgency, req.distance_km, req.is_peak)
-    
+
+    # Parse final_price from the Qeemat tool result in the trace
+    final_price = 0.0
+    breakdown = {}
+    for step in adk_result.get("trace", []):
+        if step.get("tool_name") == "get_provider_pricing_details":
+            tool_result = step.get("tool_result", {})
+            if isinstance(tool_result, dict) and "base_rate" in tool_result:
+                base = tool_result.get("base_rate", 0.0)
+                rating = tool_result.get("rating", 5.0)
+                exp = tool_result.get("experience_years", 1)
+                urgency_surcharge = 500.0 if req.urgency == "urgent" else 0.0
+                distance_fee = req.distance_km * 50.0
+                peak_fee = 300.0 if req.is_peak else 0.0
+                quality_premium = 200.0 if rating >= 4.5 else 0.0
+                experience_factor = exp * 100.0
+                final_price = round(base + urgency_surcharge + distance_fee + peak_fee + quality_premium + experience_factor, 2)
+                breakdown = {
+                    "base_rate": base,
+                    "urgency_surcharge": urgency_surcharge,
+                    "distance_fee": distance_fee,
+                    "peak_hour_fee": peak_fee,
+                    "quality_premium": quality_premium,
+                    "experience_factor": experience_factor,
+                    "total": final_price,
+                }
+
     return {
-        "final_price": 0, # Frontend can extract from message or we parse it
-        "breakdown": {}, 
+        "final_price": final_price,
+        "breakdown": breakdown,
         "message": adk_result.get("response", ""),
         "trace": [s.get("action") for s in adk_result.get("trace", [])]
     }
