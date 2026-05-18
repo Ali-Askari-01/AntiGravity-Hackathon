@@ -8,7 +8,7 @@ const app = {
     currentScreen: 'splash-screen',
     
     // API Configuration
-    apiBase: 'http://127.0.0.1:8000',
+    apiBase: 'http://127.0.0.1:8008',
     sessionId: null,
 
     // Helper for API calls

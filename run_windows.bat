@@ -1,32 +1,31 @@
 @echo off
-title Antigravity Setup and Runner
+title Antigravity — Backend + Frontend
+chcp 65001 >nul
 
 echo ========================================================
-echo        🚀 Starting Antigravity Hackathon App 🚀
+echo        ^🚀 Starting Antigravity Hackathon App ^🚀
 echo ========================================================
 echo.
 
-echo [1/3] Checking backend virtual environment...
-cd backend
-if not exist "venv\Scripts\activate.bat" (
-    echo Creating virtual environment...
-    python -m venv venv
+:: ── Make sure we run from the project root ──────────────────
+cd /d "%~dp0"
+
+:: ── Check that root-level venv exists ───────────────────────
+if not exist "venv\Scripts\uvicorn.exe" (
+    echo [ERROR] Root venv not found or uvicorn missing.
+    echo Please run: python -m venv venv ^&^& venv\Scripts\pip install -r backend\requirements.txt
+    pause
+    exit /b 1
 )
-call venv\Scripts\activate.bat
 
-echo [2/3] Installing dependencies...
-pip install -r requirements.txt >nul 2>&1
+:: ── Open frontend in browser ─────────────────────────────────
+echo [1/2] Opening frontend in browser...
+start "" "%~dp0frontend\index.html"
 
-echo [3/3] Starting Backend Server...
-echo The backend is running on http://127.0.0.1:8000
+:: ── Start backend with correct venv and module path ─────────
+echo [2/2] Starting Backend on http://127.0.0.1:8000 ...
+echo        (Use Ctrl+C to stop)
 echo.
-
-:: Open frontend in default browser
-cd ../frontend
-start index.html
-
-:: Start Uvicorn
-cd ../backend
-uvicorn main:app --reload
+venv\Scripts\uvicorn.exe backend.main:app --reload --host 127.0.0.1 --port 8000
 
 pause

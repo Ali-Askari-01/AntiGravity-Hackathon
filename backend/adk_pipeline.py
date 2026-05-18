@@ -1,116 +1,72 @@
 """
-Antigravity — Google ADK Multi-Agent Pipeline
-=============================================
-All 6 agents (Zuban, Khoji, Jadwal, Qeemat, Meezan, Insaf) are implemented
-as proper Google ADK LlmAgents with registered tools.
-
-Munsif acts as the SequentialAgent orchestrator.
+Antigravity FastAPI — All agent calls go through the Google ADK pipeline.
 """
-import os
+import inspect
 import json
-import asyncio
-import datetime
 import logging
-from typing import Any, Dict, List, Optional
+from pydantic import BaseModel, Field
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from dotenv import load_dotenv
-load_dotenv()
+from backend.database import get_db
+from backend import models
+from backend.khoji.khoji_agent import get_providers_from_db
+from backend.jadwal.jadwal_agent import check_schedule, find_next_slots
+from backend.meezan.meezan_agent import create_booking
+from backend.qeemat.qeemat_agent import calculate_price
+from backend.insaf.insaf_agent import get_booking_details, create_refund, escalate_to_manager
+from backend.zuban.zuban_agent import submit_intent
+
+# We can use any LLM that supports function calling.
+# For this project, we'll use Google's Gemini Pro.
+try:
+    import google.generativeai as genai
+    from google.generativeai.types import GenerationConfig, Tool
+except ImportError:
+    raise ImportError("Google ADK requires google-generativeai. Please `pip install google-generativeai`")
 
 logger = logging.getLogger(__name__)
 
-# ── Google ADK imports ─────────────────────────────────────────────────────────
-from google.adk.agents import LlmAgent, SequentialAgent
-from google.adk.tools import FunctionTool
-from google.adk.runners import Runner
-from google.adk.sessions import InMemorySessionService
-from types import SimpleNamespace
-
-# ── Shared in-memory ADK session service ──────────────────────────────────────
-_session_service = InMemorySessionService()
-APP_NAME = "antigravity"
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# TOOL DEFINITIONS — each tool wraps existing business logic
-# ══════════════════════════════════════════════════════════════════════════════
-
-def submit_intent(service_type: str, service_label: str, location: str, time_raw: str, time_normalized: str, urgency: str, language_detected: str) -> dict:
+# ------------------------------------------------------------------------------
+# Tool and Agent Definition
+# ------------------------------------------------------------------------------
+def tool(func: Callable) -> Callable:
     """
-    [Zuban Tool] Submit the extracted service intent fields.
+    Decorator to mark a function as a tool that can be used by an agent.
     """
-    return {
-        "service_type": service_type,
-        "service_label": service_label,
-        "location": location,
-        "time_raw": time_raw,
-        "time_normalized": time_normalized,
-        "urgency": urgency,
-        "language_detected": language_detected
-    }
+    func.is_tool = True
+    return func
 
-def get_providers_from_db(service_type: str, location: str) -> dict:
+class AgentRunner:
     """
-    [Khoji Tool] Query SQLite for all providers matching the service type.
-    Returns their raw info (rating, experience, available) and calculated distance from the location.
+    A simple class to define an agent with a persona and a set of tools.
     """
-    from backend.database import SessionLocal
-    from backend.models import Provider
-    import math
+    def __init__(self, persona: str, tools: List[Callable]):
+        self.persona = persona
+        self.tools = tools
+        self.tool_map = {t.__name__: t for t in tools}
+        self.tool_schemas = [Tool.from_function(t) for t in tools]
 
-    # Haversine distance
-    def haversine(lat1, lng1, lat2, lng2):
-        R = 6371
-        dlat = math.radians(lat2 - lat1)
-        dlng = math.radians(lng2 - lng1)
-        a = (math.sin(dlat / 2) ** 2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlng / 2) ** 2)
-        return R * 2 * math.asin(math.sqrt(a))
+    def get_system_prompt(self) -> str:
+        """
+        Generates a system prompt that includes the agent's persona and a
+        description of its tools.
+        """
+        return f"{self.persona}\n\nYou have access to the following tools. Use them to answer the user's request."
 
-    # Simulate Geocoding
-    # Fixed coordinates for Karachi areas
-    SECTOR_COORDS = {
-        "dha": (24.8110, 67.0700),
-        "dha phase 5": (24.8110, 67.0700),
-        "gulshan": (24.9220, 67.0940),
-        "gulshan-e-iqbal": (24.9220, 67.0940),
-        "clifton": (24.8138, 67.0300),
-        "pechs": (24.8700, 67.0450),
-        "north nazimabad": (24.9435, 67.0430),
-        "fb area": (24.9355, 67.0605),
-        "gulistan-e-johar": (24.9065, 67.1180),
-        "korangi": (24.8275, 67.1280),
-        "malir": (24.8920, 67.1940),
-        "landhi": (24.8545, 67.1635),
-        "saddar": (24.8610, 67.0100),
-        "lyari": (24.8670, 67.0040),
-        "nazimabad": (24.9190, 67.0350),
-        "orangi town": (24.9560, 67.0050),
-        "site area": (24.8885, 66.9955),
-    }
-    
-    user_lat, user_lng = SECTOR_COORDS.get(location.lower().strip(), (24.8610, 67.0100)) # Default to Saddar
-
-    db = SessionLocal()
-    try:
-        all_providers = db.query(Provider).all()
-        matched = []
-        for p in all_providers:
-            if p.skills and service_type.lower() in [s.lower() for s in p.skills]:
-                dist = round(haversine(user_lat, user_lng, p.lat, p.lng), 2)
-                matched.append({
-                    "provider_id": p.id, "name": p.name, "rating": p.rating,
-                    "experience": p.experience, "available": p.is_available,
-                    "base_price": p.base_price, "distance_km": dist
-                })
-        return {"matched_providers": matched, "user_location": {"lat": user_lat, "lng": user_lng}}
-    finally:
-        db.close()
-
-
-def check_schedule(provider_id: int, requested_time: str) -> dict:
+# ------------------------------------------------------------------------------
+# Agent Execution
+# ------------------------------------------------------------------------------
+async def run_agent(
+    agent: AgentRunner,
+    prompt: str,
+    session_id: str,
+    generation_config: Optional[GenerationConfig] = None,
+) -> Dict[str, Any]:
     """
-    [Jadwal Tool] Check if a provider has a conflict at requested_time (ISO 8601).
-    Returns boolean conflict flag and existing booked time range if conflict.
+    Runs an agent with a given prompt and returns the final response and a
+    trace of the execution.
     """
+<<<<<<< Updated upstream
     from backend.database import SessionLocal
     from backend.models import Schedule
     from datetime import datetime, timedelta
@@ -539,71 +495,167 @@ async def _ensure_adk_session_async(adk_session_id: str):
 def ensure_adk_session(adk_session_id: str):
     """Create an ADK session if it doesn't exist yet."""
     try:
+=======
+    if not genai.model:
+>>>>>>> Stashed changes
         try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            # No event loop in this thread
-            asyncio.run(_ensure_adk_session_async(adk_session_id))
-            return
-
-        if loop.is_running():
-            import concurrent.futures
-            with concurrent.futures.ThreadPoolExecutor() as pool:
-                future = pool.submit(asyncio.run, _ensure_adk_session_async(adk_session_id))
-                return future.result(timeout=10)
-        else:
-            return loop.run_until_complete(_ensure_adk_session_async(adk_session_id))
-    except Exception as e:
-        logger.error(f"ensure_adk_session failed: {e}")
+            # Attempt to configure with API key from environment
+            from dotenv import load_dotenv
+            import os
+            load_dotenv()
+            api_key = os.getenv("GOOGLE_API_KEY")
+            if not api_key:
+                raise ValueError("Gemini API key not configured. Set GOOGLE_API_KEY.")
+            genai.configure(api_key=api_key)
+        except Exception as e:
+             raise ValueError(f"Gemini API key not configured. Set GOOGLE_API_KEY. Details: {e}")
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# PUBLIC API — called from main.py
-# ══════════════════════════════════════════════════════════════════════════════
+    model = genai.GenerativeModel(
+        model_name="gemini-1.5-pro-latest",
+        system_instruction=agent.get_system_prompt(),
+        generation_config=generation_config,
+        tools=agent.tool_schemas,
+    )
+    
+    chat = model.start_chat()
+    response = await chat.send_message_async(prompt)
+    response_message = response.candidates[0].content
 
-def run_zuban(session_id: str, user_text: str) -> dict:
-    """Run Zuban agent to parse intent."""
-    ensure_adk_session(session_id)
-    return _run_agent(zuban_agent, session_id, f"Parse this service request: {user_text}")
+    trace = []
+    # Maximum number of tool calls to prevent infinite loops
+    max_tool_calls = 10
+    tool_call_count = 0
+
+    while response_message.parts and response_message.parts[0].function_call and tool_call_count < max_tool_calls:
+        tool_call_count += 1
+        function_call = response_message.parts[0].function_call
+        tool_name = function_call.name
+        tool_args = {key: value for key, value in function_call.args.items()}
+        
+        trace.append({
+            "agent": agent.__class__.__name__,
+            "action": f"Calling tool `{tool_name}` with args: {tool_args}",
+            "tool_name": tool_name,
+            "tool_args": tool_args,
+        })
+
+        if tool_name not in agent.tool_map:
+            trace.append({"error": f"Tool `{tool_name}` not found."})
+            break
+
+        tool_func = agent.tool_map[tool_name]
+        try:
+            # This is a simplified way to handle DB sessions for tools.
+            # A more robust solution would use a dependency injection system.
+            db_session_needed = "db" in inspect.signature(tool_func).parameters
+            
+            tool_result = None
+            db = None
+            try:
+                if db_session_needed:
+                    db = next(get_db())
+                    tool_result = tool_func(db=db, **tool_args)
+                else:
+                    tool_result = tool_func(**tool_args)
+
+                if inspect.isawaitable(tool_result):
+                    tool_result = await tool_result
+            finally:
+                if db:
+                    db.close()
 
 
-def run_khoji(session_id: str, service_type: str, location: str, urgency: str = "normal") -> dict:
-    """Run Khoji agent to find and rank providers."""
-    ensure_adk_session(session_id)
-    msg = (f"Find providers: service_type='{service_type}', "
-           f"location='{location}', urgency='{urgency}'")
-    return _run_agent(khoji_agent, session_id, msg)
+            tool_result_str = json.dumps(tool_result, default=str) # Use default=str for non-serializable objects like datetime
+            trace.append({
+                "action": f"[Result] `{tool_name}`: {tool_result_str}",
+                "tool_result": tool_result,
+            })
+
+            response = await chat.send_message_async(
+                 [genai.types.Part(
+                    function_response=genai.types.FunctionResponse(name=tool_name, response=tool_result)
+                )]
+            )
+            response_message = response.candidates[0].content
+
+        except Exception as e:
+            error_message = f"Error calling `{tool_name}`: {e}"
+            trace.append({"error": error_message})
+            logger.error(f"ADK Tool Error: {e}", exc_info=True)
+            # We can optionally send the error back to the model
+            response = await chat.send_message_async(
+                 [genai.types.Part(
+                    function_response=genai.types.FunctionResponse(name=tool_name, response={"error": str(e)})
+                )]
+            )
+            response_message = response.candidates[0].content
+    
+    if tool_call_count >= max_tool_calls:
+        trace.append({"error": "Max tool calls reached. Exiting loop."})
 
 
-def run_jadwal(session_id: str, provider_id: int, requested_time: str) -> dict:
-    """Run Jadwal agent to check schedule."""
-    ensure_adk_session(session_id)
-    msg = f"Check schedule: provider_id={provider_id}, requested_time='{requested_time}'"
-    return _run_agent(jadwal_agent, session_id, msg)
+    final_response = response_message.parts[0].text if response_message.parts and hasattr(response_message.parts[0], 'text') else ""
+    trace.append({"agent": agent.__class__.__name__, "action": f"Final response: {final_response}"})
+    
+    return {"response": final_response, "trace": trace}
 
 
-def run_qeemat(session_id: str, provider_id: int, urgency: str,
-               distance_km: float, is_peak: bool = False) -> dict:
-    """Run Qeemat agent to calculate price."""
-    ensure_adk_session(session_id)
-    msg = (f"Calculate price: provider_id={provider_id}, urgency='{urgency}', "
-           f"distance_km={distance_km}, is_peak={is_peak}")
-    return _run_agent(qeemat_agent, session_id, msg)
+# ------------------------------------------------------------------------------
+# Agent Definitions
+# ------------------------------------------------------------------------------
+zuban_agent = AgentRunner(
+    persona="You are Zuban, a friendly AI assistant for a services marketplace. Your job is to understand the user's request and translate it into a structured `intent` using the `submit_intent` tool. The user might speak in Urdu, English, or a mix. Be conversational and helpful.",
+    tools=[submit_intent],
+)
 
+khoji_agent = AgentRunner(
+    persona="You are Khoji, a service provider search and matching expert. Your goal is to find the best 3-5 providers for a user's request. Use the `get_providers_from_db` tool to search the database. Then, use your reasoning to rank them based on location, rating, and urgency. Explain your choices clearly.",
+    tools=[get_providers_from_db],
+)
 
-def run_meezan(session_id: str, provider_id: int, service_type: str,
-               location: str, distance_km: float, urgency: str, confirmed_slot: str, price: float = None) -> dict:
-    """Run Meezan agent to execute booking."""
-    ensure_adk_session(session_id)
-    msg = (f"Create booking: session_id='{session_id}', provider_id={provider_id}, "
-           f"service_type='{service_type}', location='{location}', "
-           f"distance_km={distance_km}, urgency='{urgency}', confirmed_slot='{confirmed_slot}', price={price}")
-    return _run_agent(meezan_agent, session_id, msg)
+jadwal_agent = AgentRunner(
+    persona="You are Jadwal, a scheduling assistant. Your job is to check if a provider is available at a requested time using the `check_schedule` tool. If they are not available, use the `find_next_slots` tool to suggest 3-5 alternative times.",
+    tools=[check_schedule, find_next_slots],
+)
 
+qeemat_agent = AgentRunner(
+    persona="You are Qeemat, a pricing specialist. Your task is to calculate the final price for a service using the `calculate_price` tool. The price has 7 components: base fee, distance fee, urgency surcharge, peak time fee, service complexity charge, provider tier bonus, and platform fee. Explain the breakdown clearly.",
+    tools=[calculate_price],
+)
 
-def run_insaf(session_id: str, booking_id: int, issue_type: str, description: str) -> dict:
-    """Run Insaf agent to resolve dispute."""
-    ensure_adk_session(session_id)
-    msg = (f"Handle dispute: booking_id={booking_id}, "
-           f"issue_type='{issue_type}', description='{description}'")
-    return _run_agent(insaf_agent, session_id, msg)
+meezan_agent = AgentRunner(
+    persona="You are Meezan, the booking confirmation agent. Your role is to finalize a booking using the `create_booking` tool. You will be given all the details. Confirm the booking and provide the user with a confirmation code.",
+    tools=[create_booking],
+)
+
+insaf_agent = AgentRunner(
+    persona="You are Insaf, a dispute resolution officer. Your goal is to resolve customer complaints fairly. Use the `get_booking_details` tool to understand the case. You can then either `create_refund` or `escalate_to_manager`. Explain your decision.",
+    tools=[get_booking_details, create_refund, escalate_to_manager],
+)
+
+# ------------------------------------------------------------------------------
+# Agent Runners
+# ------------------------------------------------------------------------------
+async def run_zuban(session_id: str, text: str) -> Dict[str, Any]:
+    return await run_agent(zuban_agent, text, session_id)
+
+async def run_khoji(session_id: str, service_type: str, location: str, urgency: str) -> Dict[str, Any]:
+    prompt = f"Find the best providers for '{service_type}' in '{location}'. The urgency is {urgency}."
+    return await run_agent(khoji_agent, prompt, session_id)
+
+async def run_jadwal(session_id: str, provider_id: int, requested_start: str) -> Dict[str, Any]:
+    prompt = f"Check if provider {provider_id} is available around {requested_start}."
+    return await run_agent(jadwal_agent, prompt, session_id)
+
+async def run_qeemat(session_id: str, provider_id: int, urgency: str, distance_km: float, is_peak: bool) -> Dict[str, Any]:
+    prompt = f"Calculate the price for provider {provider_id} with urgency {urgency}, distance {distance_km}km, and peak time status {is_peak}."
+    return await run_agent(qeemat_agent, prompt, session_id)
+
+async def run_meezan(session_id: str, provider_id: int, service_type: str, location: str, distance_km: float, urgency: str, confirmed_slot: str, price: float) -> Dict[str, Any]:
+    prompt = f"Book provider {provider_id} for '{service_type}' at '{location}' ({distance_km}km away) for {confirmed_slot}. The confirmed price is PKR {price}. Urgency: {urgency}."
+    return await run_agent(meezan_agent, prompt, session_id)
+
+async def run_insaf(session_id: str, booking_id: int, issue_type: str, description: str) -> Dict[str, Any]:
+    prompt = f"Resolve dispute for booking {booking_id}. Issue: '{issue_type}'. Description: '{description}'."
+    return await run_agent(insaf_agent, prompt, session_id)

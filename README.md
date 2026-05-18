@@ -12,16 +12,18 @@ Antigravity is a next-generation AI-powered service booking platform built for P
 - **🤖 Autonomous Multi-Agent Orchestration:** 8 specialized AI agents handle the entire booking lifecycle autonomously—from matching and dynamic pricing to dispute resolution.
 - **📍 Real-time Tracking:** Live provider tracking with native Google Maps integration.
 - **⚡ Dynamic Pricing & Scheduling:** Fair, transparent pricing using 7 data points (distance, urgency, peak hours) and intelligent conflict-free scheduling.
+- **🔍 Smart Intent Recognition:** AI-powered service detection from natural language prompts (e.g., "pani ki tanki leak" → Plumber, "bijli ka kaam" → Electrician).
+- **📊 Provider Ranking:** 6-factor scoring algorithm considering distance, rating, availability, experience, urgency, and trust score.
 
 ## 🏗️ Architecture
 
 Antigravity uses a robust pipeline of specialized ADK `LlmAgent`s orchestrated by a Master Agent.
 
 1. **Munsif (Orchestrator):** Manages the session state and delegates tasks sequentially.
-2. **Zuban (Intent):** Extracts service type, location, urgency, and language.
+2. **Zuban (Intent):** Extracts service type, location, urgency, and language from natural language input.
 3. **Khoji (Matching):** Queries SQLite and applies a 6-factor algorithm to find the best provider.
 4. **Jadwal (Scheduling):** Checks provider calendars, prevents double-booking, and suggests alternatives.
-5. **Qeemat (Pricing):** Calculates transparent, dynamic pricing.
+5. **Qeemat (Pricing):** Calculates transparent, dynamic pricing based on 7 components.
 6. **Meezan/Hukum (Booking):** Executes the booking and generates receipts.
 7. **Mayaar (Quality):** Manages post-service feedback loops.
 8. **Insaf (Dispute):** Handles user complaints and automatically penalizes providers if necessary.
@@ -30,7 +32,8 @@ Antigravity uses a robust pipeline of specialized ADK `LlmAgent`s orchestrated b
 
 - **Frontend:** HTML, CSS (Vanilla Custom UI), JavaScript, Google Maps JS API.
 - **Backend:** Python, FastAPI, SQLite.
-- **AI/LLM Engine:** Google Agent Development Kit (ADK), routing through **OpenRouter** (`openrouter/google/gemini-2.5-flash`).
+- **AI/LLM Engine:** Google Agent Development Kit (ADK), Gemini 2.0 Flash.
+- **Database:** SQLite (Development), PostgreSQL (Production Ready).
 
 ---
 
@@ -51,10 +54,10 @@ We have provided a convenient batch script that automatically sets up the backen
 1. Clone the repository.
 2. Double-click the `run_windows.bat` file in the root directory.
 3. The script will automatically:
-   - Create a virtual environment (`venv`).
-   - Install Python dependencies from `backend/requirements.txt`.
-   - Start the FastAPI backend on `http://127.0.0.1:8000`.
-   - Open your default web browser to the frontend interface.
+    - Create a virtual environment (`venv`).
+    - Install Python dependencies from `backend/requirements.txt`.
+    - Start the FastAPI backend on `http://127.0.0.1:8000`.
+    - Open your default web browser to the frontend interface.
 
 ### Manual Start (Alternative)
 **Terminal 1 (Backend):**
@@ -72,8 +75,48 @@ Open `frontend/index.html` in your browser or use a live server extension in VSC
 ---
 
 ## 💾 Database Seeding
-The project comes with a pre-populated SQLite database (`antigravity.db`) containing mock service providers across Karachi areas (DHA, Gulshan, Clifton, etc.) with precise coordinates and their schedules. To re-seed or wipe the database, run:
+The project comes with a pre-populated SQLite database (`antigravity.db`) containing mock service providers across Karachi areas (DHA, Gulshan, Clifton, Malir, Nazimabad, etc.) with precise coordinates and their schedules. To re-seed or wipe the database, run:
 ```bash
 cd backend
 python seed_providers.py
 ```
+
+---
+
+## 📋 API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/health` | Health check with ADK status |
+| POST | `/chat` | Send message to Zuban intent agent |
+| POST | `/search` | Find providers by service type and location |
+| POST | `/check_schedule` | Check provider availability |
+| POST | `/pricing` | Calculate dynamic pricing |
+| POST | `/book` | Create a new booking |
+| POST | `/track` | Update booking status |
+| POST | `/feedback` | Submit service feedback |
+| POST | `/dispute` | Raise a dispute |
+| GET | `/providers` | List all providers |
+| GET | `/bookings` | List all bookings |
+| GET | `/trace/{session_id}` | Get agent workplan trace |
+
+---
+
+## 🗺️ Supported Locations
+
+Currently optimized for **Karachi, Pakistan** with providers in:
+- Gulshan-e-Iqbal, DHA, Clifton, PECHS
+- North Nazimabad, Federal B. Area, Johar
+- Korangi, Saddar, Lyari, Orangi Town
+- Malir, Landhi, Nazimabad
+
+---
+
+## 📝 Recent Updates
+
+- ✅ Fixed intent recognition for plumbing/electrical services
+- ✅ Added Malir area electricians to database
+- ✅ Fixed booking flow and price breakdown parsing
+- ✅ Improved location matching with Google Maps Geocoding API
+- ✅ Enhanced fallback keyword matching for Roman Urdu inputs
+- ✅ Added skill similarity matching for unknown service types
