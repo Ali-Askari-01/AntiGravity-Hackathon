@@ -10,14 +10,28 @@ const app = {
     // API Configuration
     apiBase: 'http://127.0.0.1:8000',
     sessionId: null,
+    authToken: null,
+    currentUser: null,
+    selectedProvider: null,
+    currentIntent: null,
+    currentBooking: null,
+    currentRating: 5,
+    map: null,
+    providerMarker: null,
+    userMarker: null,
+    routeLine: null,
+    ws: null,
 
-    // Helper for API calls
+    // Helper for API calls with auth token
     async callAPI(endpoint, method = 'POST', data = null) {
         try {
             const options = {
                 method: method,
                 headers: { 'Content-Type': 'application/json' },
             };
+            if (this.authToken) {
+                options.headers['Authorization'] = `Bearer ${this.authToken}`;
+            }
             if (data) options.body = JSON.stringify(data);
             
             const response = await fetch(`${this.apiBase}${endpoint}`, options);
@@ -37,9 +51,25 @@ const app = {
     init() {
         console.log("Antigravity App Initialized");
         
+        // Check for stored auth token
+        const storedToken = localStorage.getItem('authToken');
+        const storedUser = localStorage.getItem('currentUser');
+        if (storedToken && storedUser) {
+            this.authToken = storedToken;
+            this.currentUser = JSON.parse(storedUser);
+            this.updateUserGreeting();
+        }
+        
         // Auto-hide splash screen after 2.5 seconds
         setTimeout(() => {
-            this.navigate('auth-screen');
+            if (this.authToken) {
+                this.navigate('home-screen');
+                this.loadRecentBookings();
+                this.loadAnalytics();
+                this.loadNotifications();
+            } else {
+                this.navigate('auth-screen');
+            }
         }, 2500);
 
         // Bind Enter key on chat input
@@ -53,10 +83,216 @@ const app = {
         }
     },
 
+    // Toggle between login and register forms
+    toggleAuthForm(form) {
+        const loginForm = document.getElementById('login-form');
+        const registerForm = document.getElementById('register-form');
+        
+        if (form === 'register') {
+            loginForm.style.display = 'none';
+            registerForm.style.display = 'block';
+        } else {
+            loginForm.style.display = 'block';
+            registerForm.style.display = 'none';
+        }
+    },
+
+    // Login with email and password
+    async login() {
+        const email = document.getElementById('login-email').value;
+        const password = document.getElementById('login-password').value;
+        const loginBtn = document.querySelector('#login-form .btn-primary');
+
+        if (!email || !password) {
+            alert("Please enter email and password.");
+            return;
+        }
+
+        // Disable button and show loading
+        loginBtn.disabled = true;
+        loginBtn.textContent = 'Logging in...';
+
+        try {
+            const result = await this.callAPI('/auth/login', 'POST', {
+                phone: email,
+                password: password
+            });
+            
+            this.authToken = result.token;
+            this.currentUser = result.user;
+            
+            // Store in localStorage
+            localStorage.setItem('authToken', result.token);
+            localStorage.setItem('currentUser', JSON.stringify(result.user));
+            
+            this.updateUserGreeting();
+            this.navigate('home-screen');
+            this.loadRecentBookings();
+            this.loadAnalytics();
+            this.loadNotifications();
+        } catch (error) {
+            alert("Login failed: " + error.message);
+        } finally {
+            loginBtn.disabled = false;
+            loginBtn.textContent = 'Login';
+        }
+    },
+
+    // Register with email and password
+    async register() {
+        const name = document.getElementById('register-name').value;
+        const email = document.getElementById('register-email').value;
+        const password = document.getElementById('register-password').value;
+        const registerBtn = document.querySelector('#register-form .btn-primary');
+
+        if (!name || !email || !password) {
+            alert("Please fill all fields.");
+            return;
+        }
+
+        // Disable button and show loading
+        registerBtn.disabled = true;
+        registerBtn.textContent = 'Creating Account...';
+
+        try {
+            const result = await this.callAPI('/auth/register', 'POST', {
+                name: name,
+                phone: email,
+                email: email,
+                password: password,
+                role: 'user'
+            });
+            
+            this.authToken = result.token;
+            this.currentUser = result.user;
+            
+            // Store in localStorage
+            localStorage.setItem('authToken', result.token);
+            localStorage.setItem('currentUser', JSON.stringify(result.user));
+            
+            this.updateUserGreeting();
+            this.navigate('home-screen');
+            this.loadRecentBookings();
+            this.loadAnalytics();
+            this.loadNotifications();
+        } catch (error) {
+            alert("Registration failed: " + error.message);
+        } finally {
+            registerBtn.disabled = false;
+            registerBtn.textContent = 'Create Account';
+        }
+    },
+
+    // Logout
+    async logout() {
+        try {
+            await this.callAPI('/auth/logout', 'POST');
+        } catch (e) {
+            console.warn('Logout API call failed:', e);
+        }
+        
+        // Clear local storage
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('currentUser');
+        this.authToken = null;
+        this.currentUser = null;
+        
+        this.navigate('auth-screen');
+    },
+
+    // Update user greeting
+    updateUserGreeting() {
+        const greetingEl = document.getElementById('user-greeting');
+        if (greetingEl && this.currentUser) {
+            greetingEl.textContent = `Hello, ${this.currentUser.name || 'User'}`;
+        }
+    },
+
+    // Load analytics
+    async loadAnalytics() {
+        try {
+            const stats = await this.callAPI('/analytics/stats', 'GET');
+            const summaryEl = document.getElementById('analytics-summary');
+            if (summaryEl) {
+                summaryEl.style.display = 'block';
+                document.getElementById('stat-bookings').textContent = stats.total_bookings || 0;
+                document.getElementById('stat-completed').textContent = stats.completed_bookings || 0;
+                document.getElementById('stat-rating').textContent = stats.average_rating || '0.0';
+            }
+        } catch (e) {
+            console.warn('Could not load analytics:', e);
+        }
+    },
+
+    // Load notifications
+    async loadNotifications() {
+        try {
+            const result = await this.callAPI('/notifications', 'GET');
+            const badgeEl = document.getElementById('notif-badge');
+            if (badgeEl) {
+                if (result.unread > 0) {
+                    badgeEl.textContent = result.unread;
+                    badgeEl.style.display = 'block';
+                } else {
+                    badgeEl.style.display = 'none';
+                }
+            }
+        } catch (e) {
+            console.warn('Could not load notifications:', e);
+        }
+    },
+
+    // Show notifications modal
+    async showNotifications() {
+        try {
+            const result = await this.callAPI('/notifications', 'GET');
+            const listEl = document.getElementById('notification-list');
+            listEl.innerHTML = '';
+            
+            if (!result.notifications || result.notifications.length === 0) {
+                listEl.innerHTML = '<p class="text-muted" style="text-align:center;padding:16px;">No notifications yet.</p>';
+            } else {
+                result.notifications.forEach(n => {
+                    const item = document.createElement('div');
+                    item.className = `notification-item ${!n.is_read ? 'unread' : ''}`;
+                    item.innerHTML = `
+                        <div class="notif-icon"><i class="ph-fill ph-bell"></i></div>
+                        <div class="notif-content">
+                            <p>${n.message}</p>
+                            <small>${new Date(n.created_at).toLocaleString()}</small>
+                        </div>
+                    `;
+                    listEl.appendChild(item);
+                });
+            }
+            
+            document.getElementById('notification-modal').style.display = 'flex';
+        } catch (e) {
+            console.warn('Could not load notifications:', e);
+        }
+    },
+
+    // Hide notifications modal
+    hideNotifications() {
+        document.getElementById('notification-modal').style.display = 'none';
+    },
+
+    // Mark all notifications as read
+    async markAllNotificationsRead() {
+        try {
+            await this.callAPI('/notifications/mark-all-read', 'POST');
+            this.hideNotifications();
+            this.loadNotifications();
+        } catch (e) {
+            console.warn('Could not mark notifications as read:', e);
+        }
+    },
+
     // Load recent bookings on home screen
     async loadRecentBookings() {
         try {
-            const bookings = await this.callAPI('/bookings', 'GET');
+            const result = await this.callAPI('/bookings', 'GET');
+            const bookings = result.bookings || [];
             const list = document.querySelector('.booking-list');
             if (!list) return;
             list.innerHTML = '';
@@ -199,6 +435,36 @@ const app = {
         if (targetScreen) {
             targetScreen.classList.add('active');
             this.currentScreen = screenId;
+            
+            // Clear chat mock data when entering chat screen
+            if (screenId === 'chat-screen') {
+                const chatContainer = document.getElementById('chat-container');
+                const typingIndicator = document.getElementById('typing-indicator');
+                // Remove any existing chat bubbles but keep typing indicator
+                Array.from(chatContainer.children).forEach(child => {
+                    if (child !== typingIndicator && child.classList.contains('chat-bubble')) {
+                        child.remove();
+                    }
+                });
+                // Add welcome message if no bubbles exist
+                if (!chatContainer.querySelector('.chat-bubble')) {
+                    const welcomeBubble = document.createElement('div');
+                    welcomeBubble.className = 'chat-bubble agent-bubble fade-up-anim';
+                    welcomeBubble.textContent = 'Assalam o Alaikum! Mai Munsif hoon. Aapko aaj kis service ki zaroorat hai?';
+                    chatContainer.insertBefore(welcomeBubble, typingIndicator);
+                }
+                typingIndicator.style.display = 'none';
+            }
+            
+            // Load bookings when entering bookings screen
+            if (screenId === 'bookings-screen') {
+                this.loadBookingsList();
+            }
+            
+            // Load profile when entering profile screen
+            if (screenId === 'profile-screen') {
+                this.loadProfile();
+            }
         }
 
         // Handle Bottom Nav Bar visibility
@@ -242,14 +508,15 @@ const app = {
                 agentBubble.className = 'chat-bubble agent-bubble fade-up-anim';
                 
                 let content = `<p>${res.message}</p><div class="provider-list mt-2">`;
-                providers.forEach(p => {
+                providers.forEach((p, index) => {
+                    const verifiedBadge = p.is_verified ? '<i class="ph-fill ph-seal-check text-primary" title="Verified Provider"></i>' : '';
                     content += `
-                        <div class="provider-option-card glass-card mb-2" onclick="app.selectProvider(${JSON.stringify(p).replace(/"/g, '&quot;')}, ${JSON.stringify(intent).replace(/"/g, '&quot;')})">
+                        <div class="provider-option-card glass-card mb-2" data-provider-index="${index}">
                             <div class="provider-row">
-                                <img src="https://ui-avatars.com/api/?name=${p.name.replace(/ /g, '+')}&background=1A56DB&color=fff" class="avatar-sm">
+                                <img src="https://ui-avatars.com/api/?name=${encodeURIComponent(p.name)}&background=1A56DB&color=fff" class="avatar-sm">
                                 <div class="provider-info">
-                                    <strong>${p.name}</strong>
-                                    <p>⭐ ${p.rating} • ${p.distance_km}km • ${p.rationale}</p>
+                                    <strong>${this.escapeHtml(p.name)} ${verifiedBadge}</strong>
+                                    <p>⭐ ${p.rating} • ${p.distance_km}km • ${this.escapeHtml(p.rationale || 'Recommended')}</p>
                                 </div>
                                 <div class="price-tag">PKR ${p.base_price}</div>
                             </div>
@@ -259,9 +526,16 @@ const app = {
                 content += `</div>`;
                 agentBubble.innerHTML = content;
                 
+                // Add event listeners to provider cards
                 const chatContainer = document.getElementById('chat-container');
                 const typingIndicator = document.getElementById('typing-indicator');
                 chatContainer.insertBefore(agentBubble, typingIndicator);
+                
+                agentBubble.querySelectorAll('.provider-option-card').forEach(card => {
+                    const index = parseInt(card.dataset.providerIndex);
+                    card.onclick = () => this.selectProvider(providers[index], intent);
+                });
+                
                 chatContainer.scrollTop = chatContainer.scrollHeight;
             } else {
                 this.addAgentResponse(res.message);
@@ -269,6 +543,13 @@ const app = {
         } catch (error) {
             this.addAgentResponse("Khoji se rabta nahi ho saka. (Search failed)");
         }
+    },
+
+    // Escape HTML to prevent XSS
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
     },
 
     async selectProvider(provider, intent) {
@@ -306,6 +587,12 @@ const app = {
     },
 
     async confirmBooking() {
+        const confirmBtn = document.querySelector('#chat-container .btn-primary');
+        if (confirmBtn) {
+            confirmBtn.disabled = true;
+            confirmBtn.textContent = 'Confirming...';
+        }
+        
         this.addAgentResponse("Booking confirm ho rahi hai... Qeemat aur Meezan agents kaam kar rahe hain.");
         
         try {
@@ -388,36 +675,35 @@ const app = {
             if (feedbackPrice) feedbackPrice.textContent = `PKR ${res.final_price.toLocaleString()}`;
 
             this.navigate('confirmation-screen');
+            
+            // Refresh analytics and bookings
+            this.loadAnalytics();
+            this.loadRecentBookings();
         } catch (error) {
             console.error(error);
             this.addAgentResponse("Booking fail ho gayi. (Booking failed)");
-        }
-    },
-
-    // Mock Login Function
-    login() {
-        const phone = document.getElementById('phone').value;
-        const password = document.getElementById('password').value;
-
-        if (phone && password) {
-            setTimeout(() => {
-                this.navigate('home-screen');
-                this.loadRecentBookings();
-            }, 500);
-        } else {
-            alert("Please enter phone and password.");
+        } finally {
+            if (confirmBtn) {
+                confirmBtn.disabled = false;
+                confirmBtn.textContent = 'Confirm Booking';
+            }
         }
     },
 
     // Send Message in Chat
     async sendMessage() {
         const input = document.getElementById('chat-input');
+        const sendBtn = document.querySelector('.send-btn');
         const messageText = input.value.trim();
 
         if (messageText === '') return;
 
         const chatContainer = document.getElementById('chat-container');
         const typingIndicator = document.getElementById('typing-indicator');
+
+        // Disable input and button during request
+        input.disabled = true;
+        if (sendBtn) sendBtn.style.opacity = '0.5';
 
         // 1. Create and append User Bubble
         const userBubble = document.createElement('div');
@@ -480,6 +766,11 @@ const app = {
         } catch (error) {
             typingIndicator.style.display = 'none';
             this.addAgentResponse("Maazrat! System mein koi masla aa gaya hai. (Error connecting to backend)");
+        } finally {
+            // Re-enable input and button
+            input.disabled = false;
+            if (sendBtn) sendBtn.style.opacity = '1';
+            input.focus();
         }
     },
 
@@ -565,6 +856,9 @@ const app = {
         const oldBtn = document.getElementById('finish-btn');
         if (oldBtn) oldBtn.remove();
 
+        // Connect to WebSocket for real-time updates
+        this.connectTrackingWebSocket();
+
         // Update arrival est progressively
         const arrivalEst = document.querySelector('.arrival-est h2');
         const statusMsg = document.querySelector('.status-msg');
@@ -606,6 +900,10 @@ const app = {
                             status: 'COMPLETED'
                         }).catch(e => console.warn('Track update failed:', e));
                     }
+                    // Close WebSocket
+                    if (this.ws) {
+                        this.ws.close();
+                    }
                     this.navigate('feedback-screen');
                     // Ensure correct price on feedback screen
                     const priceEl = document.querySelector('.final-invoice strong');
@@ -616,6 +914,35 @@ const app = {
                 infoCard.appendChild(finishBtn);
             }
         }, 10000);
+    },
+
+    // Connect to WebSocket for real-time tracking
+    connectTrackingWebSocket() {
+        if (!this.currentBooking?.booking_id) return;
+        
+        const wsUrl = `ws://127.0.0.1:8000/ws/tracking/${this.currentBooking.booking_id}`;
+        this.ws = new WebSocket(wsUrl);
+        
+        this.ws.onopen = () => {
+            console.log('WebSocket connected for tracking');
+        };
+        
+        this.ws.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            console.log('Tracking update:', data);
+            // Update map with provider location
+            if (data.provider_location && this.providerMarker) {
+                this.providerMarker.setPosition(data.provider_location);
+            }
+        };
+        
+        this.ws.onerror = (error) => {
+            console.warn('WebSocket error:', error);
+        };
+        
+        this.ws.onclose = () => {
+            console.log('WebSocket disconnected');
+        };
     },
 
     initMap() {
@@ -800,6 +1127,11 @@ const app = {
     },
 
     async submitFeedback() {
+        if (!this.currentBooking?.booking_id) {
+            alert("No booking found to submit feedback for.");
+            return;
+        }
+        
         const rating = this.currentRating || 5;
         const comment = document.getElementById('feedback-comment').value;
         const onTime = document.getElementById('check-time').checked;
@@ -833,12 +1165,18 @@ const app = {
     },
 
     async submitDispute() {
+        if (!this.currentBooking?.booking_id) {
+            alert("No booking found to dispute.");
+            this.hideDisputeModal();
+            return;
+        }
+        
         const type = document.getElementById('dispute-type').value;
         const desc = document.getElementById('dispute-desc').value;
         
         try {
             const res = await this.callAPI('/dispute', 'POST', {
-                booking_id: this.currentBooking?.booking_id || 1,
+                booking_id: this.currentBooking.booking_id,
                 issue_type: type,
                 description: desc
             });
@@ -848,7 +1186,7 @@ const app = {
             const disputeWorkplan = [
                 { agent: 'Insaf', action: `Dispute received: ${type.replace(/_/g,' ')}` },
                 { agent: 'Insaf', action: `Classification: ${type}` },
-                { agent: 'Insaf', action: `Resolution: ${res.resolution}` },
+                { agent: 'Insaf', action: `Resolution: ${res.resolution || res.message || 'Processing'}` },
                 { agent: 'Insaf', action: `Status: ${res.status || 'resolved'}` }
             ];
             this.runTrace(disputeWorkplan, () => this.navigate('home-screen'));
@@ -865,6 +1203,67 @@ const app = {
         agentBubble.textContent = text;
         chatContainer.insertBefore(agentBubble, typingIndicator);
         chatContainer.scrollTop = chatContainer.scrollHeight;
+    },
+
+    // Load full bookings list
+    async loadBookingsList() {
+        try {
+            const result = await this.callAPI('/bookings', 'GET');
+            const bookings = result.bookings || [];
+            const list = document.getElementById('bookings-list-full');
+            if (!list) return;
+            list.innerHTML = '';
+            if (!bookings || bookings.length === 0) {
+                list.innerHTML = '<p class="text-muted" style="text-align:center;padding:32px;">No bookings yet.</p>';
+                return;
+            }
+            bookings.forEach(b => {
+                const item = document.createElement('div');
+                item.className = 'booking-list-item glass-card mb-2';
+                item.innerHTML = `
+                    <div class="booking-item-row">
+                        <div class="booking-item-icon">
+                            <i class="ph-fill ph-calendar-check"></i>
+                        </div>
+                        <div class="booking-item-info">
+                            <strong>${b.service_type ? b.service_type.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase()) : 'Service'}</strong>
+                            <p>${b.confirmation_code || ''} • <span class="status-badge status-${(b.status||'').toLowerCase()}">${b.status || 'N/A'}</span></p>
+                        </div>
+                        <div class="booking-item-price">PKR ${b.price ? Math.round(b.price).toLocaleString() : 'N/A'}</div>
+                    </div>
+                `;
+                list.appendChild(item);
+            });
+        } catch (e) {
+            console.warn('Could not load bookings:', e);
+        }
+    },
+
+    // Load profile screen
+    async loadProfile() {
+        if (!this.currentUser) return;
+        
+        const nameEl = document.getElementById('profile-name');
+        const emailEl = document.getElementById('profile-email');
+        const avatarEl = document.getElementById('profile-avatar');
+        
+        if (nameEl) nameEl.textContent = this.currentUser.name || 'User';
+        if (emailEl) emailEl.textContent = this.currentUser.email || this.currentUser.phone || '';
+        if (avatarEl) avatarEl.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(this.currentUser.name || 'User')}&background=1A56DB&color=fff`;
+        
+        // Load stats
+        try {
+            const stats = await this.callAPI('/analytics/stats', 'GET');
+            const bookingsCount = document.getElementById('profile-bookings-count');
+            const completedCount = document.getElementById('profile-completed-count');
+            const rating = document.getElementById('profile-rating');
+            
+            if (bookingsCount) bookingsCount.textContent = stats.total_bookings || 0;
+            if (completedCount) completedCount.textContent = stats.completed_bookings || 0;
+            if (rating) rating.textContent = stats.average_rating || '0.0';
+        } catch (e) {
+            console.warn('Could not load profile stats:', e);
+        }
     }
 };
 

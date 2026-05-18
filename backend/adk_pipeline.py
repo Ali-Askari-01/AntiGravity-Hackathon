@@ -182,7 +182,7 @@ async def run_qeemat(session_id: str, provider_id: int, urgency: str, distance_k
 
 async def run_meezan(
     session_id: str, provider_id: int, service_type: str, location: str,
-    distance_km: float, urgency: str, confirmed_slot: str, price: float = 0
+    distance_km: float, urgency: str, confirmed_slot: str, price: float = 0, user_id: int = None
 ) -> Dict[str, Any]:
     """Create booking via Meezan."""
     trace = [{"agent": "Meezan", "action": "Creating booking..."}]
@@ -197,6 +197,7 @@ async def run_meezan(
             distance_km=distance_km,
             urgency=urgency,
             confirmed_slot=confirmed_slot,
+            user_id=user_id,
         )
         trace.append({
             "agent": "Meezan",

@@ -25,7 +25,8 @@ class MeezanAgent:
         location: str, 
         distance_km: float,
         urgency: str,
-        confirmed_slot: str
+        confirmed_slot: str,
+        user_id: int = None
     ) -> dict:
         # 1. Fetch provider details
         provider = db.query(Provider).filter(Provider.id == provider_id).first()
@@ -101,6 +102,7 @@ class MeezanAgent:
 
         # 7. Save to DB
         booking = Booking(
+            user_id=user_id,
             session_id=session_id,
             provider_id=provider_id,
             service_type=service_type,

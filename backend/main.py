@@ -1,7 +1,7 @@
 """
 Antigravity FastAPI — All agent calls go through the Google ADK pipeline.
 """
-from fastapi import FastAPI, HTTPException, Depends, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Depends, WebSocket, WebSocketDisconnect, Header
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List
@@ -63,9 +63,13 @@ def hash_password(password: str) -> str:
 def generate_token() -> str:
     return secrets.token_urlsafe(32)
 
-def get_current_user(token: str = None, db: SessionLocal = Depends(get_db)):
+def get_current_user(authorization: str = Header(None), db: SessionLocal = Depends(get_db)):
     """Simple token-based auth for demo"""
-    if not token:
+    if not authorization:
+        return None
+    # Extract token from "Bearer <token>"
+    scheme, _, token = authorization.partition(" ")
+    if scheme.lower() != "bearer" or not token:
         return None
     user_data = active_tokens.get(token)
     if not user_data:
@@ -405,7 +409,7 @@ async def get_pricing(req: PricingRequest, db: Session = Depends(get_db)):
 
 
 @app.post("/book")
-async def create_booking(req: BookingRequest, db: Session = Depends(get_db)):
+async def create_booking(req: BookingRequest, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
     """POST /book — Qeemat + Meezan via ADK: price then book."""
     if not _adk_available:
         raise HTTPException(status_code=500, detail="ADK not available.")
@@ -415,8 +419,12 @@ async def create_booking(req: BookingRequest, db: Session = Depends(get_db)):
 
     try:
         # 1. Get Price from Qeemat
+        # Determine if current time is peak (9-11 AM, 5-8 PM)
+        current_hour = datetime.datetime.now().hour
+        is_peak = (9 <= current_hour <= 11) or (17 <= current_hour <= 20)
+        
         qeemat_result = await adk.run_qeemat(
-            session_id, req.provider_id, req.urgency, req.distance_km, False # is_peak=False for now
+            session_id, req.provider_id, req.urgency, req.distance_km, is_peak
         )
         _push_trace(session_id, qeemat_result.get("trace", []))
         
@@ -437,7 +445,7 @@ async def create_booking(req: BookingRequest, db: Session = Depends(get_db)):
         meezan_result = await adk.run_meezan(
             session_id, req.provider_id, req.service_type,
             req.location, req.distance_km, req.urgency, req.confirmed_slot,
-            price=price
+            price=price, user_id=current_user["id"] if current_user else None
         )
         _push_trace(session_id, meezan_result.get("trace", []))
         
@@ -479,6 +487,29 @@ async def create_booking(req: BookingRequest, db: Session = Depends(get_db)):
         munsif.add_workplan_step(session_id, "System", f"Booking failed: {e}", error=True)
         raise HTTPException(status_code=400, detail=str(e))
 
+
+@app.post("/bookings/{booking_id}/cancel")
+def cancel_booking(booking_id: int, current_user: dict = Depends(get_current_user), db=Depends(get_db)):
+    """Cancel a booking"""
+    booking = db.query(models.Booking).filter(models.Booking.id == booking_id).first()
+    if not booking:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    
+    # Check ownership if user is authenticated
+    if current_user and booking.user_id != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Not your booking")
+    
+    if booking.status in ["completed", "cancelled"]:
+        raise HTTPException(status_code=400, detail=f"Cannot cancel booking with status: {booking.status}")
+    
+    booking.status = "cancelled"
+    db.commit()
+    
+    return {
+        "status": "success",
+        "booking_id": booking_id,
+        "new_status": "cancelled"
+    }
 
 @app.post("/track")
 def track_booking(req: TrackRequest, db=Depends(get_db)):
@@ -538,7 +569,7 @@ async def raise_dispute(req: DisputeRequest, db: Session = Depends(get_db)):
     
     try:
         # A dispute needs its own session for tracking purposes
-        munsif_session = munsif.create_session(prefix="dispute_")
+        munsif_session = munsif.create_session()
         munsif.add_workplan_step(munsif_session, "System", f"Routing to Insaf for dispute on Booking {req.booking_id}")
 
         insaf_result = await adk.run_insaf(
@@ -571,10 +602,13 @@ async def raise_dispute(req: DisputeRequest, db: Session = Depends(get_db)):
 
 # ── Read-only utility endpoints ─────────────────────────────────────────────────
 @app.get("/bookings")
-def list_bookings(skip: int = 0, limit: int = 20, db=Depends(get_db)):
-    """List bookings with pagination"""
-    bookings = db.query(models.Booking).order_by(models.Booking.id.desc()).offset(skip).limit(limit).all()
-    total = db.query(models.Booking).count()
+def list_bookings(skip: int = 0, limit: int = 20, current_user: dict = Depends(get_current_user), db=Depends(get_db)):
+    """List bookings with pagination, scoped to authenticated user"""
+    query = db.query(models.Booking)
+    if current_user:
+        query = query.filter(models.Booking.user_id == current_user["id"])
+    bookings = query.order_by(models.Booking.id.desc()).offset(skip).limit(limit).all()
+    total = query.count()
     return {"bookings": bookings, "total": total, "skip": skip, "limit": limit}
 
 @app.get("/booking/{booking_id}")
@@ -701,18 +735,19 @@ def login_user(req: LoginRequest, db=Depends(get_db)):
     }
 
 @app.get("/auth/me")
-def get_current_user_info(token: str = None, db=Depends(get_db)):
+def get_current_user_info(current_user: dict = Depends(get_current_user)):
     """Get current user info"""
-    user_data = get_current_user(token, db)
-    if not user_data:
+    if not current_user:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    return user_data
+    return current_user
 
 @app.post("/auth/logout")
-def logout_user(token: str = None):
+def logout_user(authorization: str = Header(None)):
     """Logout user"""
-    if token and token in active_tokens:
-        del active_tokens[token]
+    if authorization:
+        scheme, _, token = authorization.partition(" ")
+        if scheme.lower() == "bearer" and token in active_tokens:
+            del active_tokens[token]
     return {"status": "success", "message": "Logged out successfully"}
 
 # ── WebSocket for Real-time Tracking ───────────────────────────────────────────
@@ -736,11 +771,11 @@ async def websocket_tracking(websocket: WebSocket, booking_id: int):
 
 # ── Notification Endpoints ──────────────────────────────────────────────────────
 @app.get("/notifications")
-def get_notifications(user_id: int = None, skip: int = 0, limit: int = 20, db=Depends(get_db)):
-    """Get user notifications"""
+def get_notifications(current_user: dict = Depends(get_current_user), skip: int = 0, limit: int = 20, db=Depends(get_db)):
+    """Get user notifications, scoped to authenticated user"""
     query = db.query(models.Notification)
-    if user_id:
-        query = query.filter(models.Notification.user_id == user_id)
+    if current_user:
+        query = query.filter(models.Notification.user_id == current_user["id"])
     
     total = query.count()
     notifications = query.order_by(models.Notification.created_at.desc()).offset(skip).limit(limit).all()
@@ -750,6 +785,19 @@ def get_notifications(user_id: int = None, skip: int = 0, limit: int = 20, db=De
         "total": total,
         "unread": query.filter(models.Notification.is_read == False).count()
     }
+
+@app.post("/notifications/mark-all-read")
+def mark_all_notifications_read(current_user: dict = Depends(get_current_user), db=Depends(get_db)):
+    """Mark all notifications as read for the current user"""
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    db.query(models.Notification).filter(
+        models.Notification.user_id == current_user["id"],
+        models.Notification.is_read == False
+    ).update({"is_read": True})
+    db.commit()
+    return {"status": "success", "message": "All notifications marked as read"}
 
 @app.post("/notifications/{notification_id}/read")
 def mark_notification_read(notification_id: int, db=Depends(get_db)):
@@ -764,17 +812,22 @@ def mark_notification_read(notification_id: int, db=Depends(get_db)):
 
 # ── Analytics Endpoints ────────────────────────────────────────────────────────
 @app.get("/analytics/stats")
-def get_analytics(db=Depends(get_db)):
-    """Get simple analytics stats"""
+def get_analytics(current_user: dict = Depends(get_current_user), db=Depends(get_db)):
+    """Get simple analytics stats, scoped to authenticated user"""
     try:
-        total_bookings = db.query(models.Booking).count()
-        completed_bookings = db.query(models.Booking).filter(models.Booking.status == "completed").count()
+        query = db.query(models.Booking)
+        if current_user:
+            query = query.filter(models.Booking.user_id == current_user["id"])
+        
+        total_bookings = query.count()
+        completed_bookings = query.filter(models.Booking.status == "completed").count()
         total_providers = db.query(models.Provider).count()
         active_providers = db.query(models.Provider).filter(models.Provider.is_available == True).count()
         total_users = db.query(models.User).count()
         
-        # Average rating
-        feedbacks = db.query(models.Feedback).all()
+        # Average rating for user's bookings
+        user_booking_ids = [b.id for b in query.all()]
+        feedbacks = db.query(models.Feedback).filter(models.Feedback.booking_id.in_(user_booking_ids)).all() if user_booking_ids else []
         avg_rating = 0
         if feedbacks:
             avg_rating = sum([f.rating for f in feedbacks]) / len(feedbacks)

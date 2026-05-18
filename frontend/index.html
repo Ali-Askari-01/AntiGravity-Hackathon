@@ -39,25 +39,50 @@
     <section id="auth-screen" class="view">
         <div class="auth-container">
             <div class="auth-header">
-                <h2>Welcome Back</h2>
-                <p>Login to continue booking services.</p>
+                <h2>Welcome to Antigravity</h2>
+                <p>Login or create an account to continue.</p>
             </div>
             
-            <div class="auth-form">
+            <!-- Login Form -->
+            <div class="auth-form" id="login-form">
                 <div class="input-group">
-                    <input type="text" id="phone" required>
-                    <label for="phone">Phone Number</label>
+                    <input type="email" id="login-email" required>
+                    <label for="login-email">Email Address</label>
                     <div class="underline"></div>
                 </div>
                 
                 <div class="input-group">
-                    <input type="password" id="password" required>
-                    <label for="password">Password</label>
+                    <input type="password" id="login-password" required>
+                    <label for="login-password">Password</label>
                     <div class="underline"></div>
                 </div>
                 
                 <button class="btn-primary ripple mt-4" onclick="app.login()">Login</button>
-                <button class="btn-text mt-2">Create Account</button>
+                <button class="btn-text mt-2" onclick="app.toggleAuthForm('register')">Create Account</button>
+            </div>
+            
+            <!-- Register Form -->
+            <div class="auth-form" id="register-form" style="display: none;">
+                <div class="input-group">
+                    <input type="text" id="register-name" required>
+                    <label for="register-name">Full Name</label>
+                    <div class="underline"></div>
+                </div>
+                
+                <div class="input-group">
+                    <input type="email" id="register-email" required>
+                    <label for="register-email">Email Address</label>
+                    <div class="underline"></div>
+                </div>
+                
+                <div class="input-group">
+                    <input type="password" id="register-password" required>
+                    <label for="register-password">Password</label>
+                    <div class="underline"></div>
+                </div>
+                
+                <button class="btn-primary ripple mt-4" onclick="app.register()">Create Account</button>
+                <button class="btn-text mt-2" onclick="app.toggleAuthForm('login')">Already have an account? Login</button>
             </div>
         </div>
     </section>
@@ -65,8 +90,17 @@
     <!-- ==================== HOME DASHBOARD ==================== -->
     <section id="home-screen" class="view has-bottom-nav">
         <header class="app-header">
-            <h1 class="app-title">Antigravity</h1>
-            <button class="icon-btn"><i class="ph ph-user"></i></button>
+            <div class="header-left">
+                <h1 class="app-title">Antigravity</h1>
+                <span id="user-greeting" class="user-greeting">Hello, User</span>
+            </div>
+            <div class="header-right">
+                <button class="icon-btn" onclick="app.showNotifications()" id="notif-btn">
+                    <i class="ph ph-bell"></i>
+                    <span class="notif-badge" id="notif-badge" style="display: none;">0</span>
+                </button>
+                <button class="icon-btn" onclick="app.logout()"><i class="ph ph-sign-out"></i></button>
+            </div>
         </header>
 
         <main class="home-container">
@@ -95,6 +129,28 @@
                 </div>
             </div>
             
+            <!-- Analytics Summary -->
+            <div class="analytics-summary mt-4" id="analytics-summary" style="display: none;">
+                <h3 class="section-title">Quick Stats</h3>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <i class="ph-fill ph-calendar-check"></i>
+                        <span id="stat-bookings">0</span>
+                        <p>Total Bookings</p>
+                    </div>
+                    <div class="stat-card">
+                        <i class="ph-fill ph-check-circle"></i>
+                        <span id="stat-completed">0</span>
+                        <p>Completed</p>
+                    </div>
+                    <div class="stat-card">
+                        <i class="ph-fill ph-star"></i>
+                        <span id="stat-rating">0</span>
+                        <p>Avg Rating</p>
+                    </div>
+                </div>
+            </div>
+            
             <h3 class="section-title mt-4">Your Recent Services</h3>
             <div class="booking-list">
                 <!-- Recent items -->
@@ -120,22 +176,8 @@
         </header>
 
         <main class="chat-body" id="chat-container">
-            <!-- Mock Chat -->
-            <div class="chat-bubble agent-bubble fade-up-anim">
-                Assalam o Alaikum! Mai Munsif hoon. Aapko aaj kis service ki zaroorat hai?
-            </div>
-            <div class="chat-bubble user-bubble fade-up-anim" style="animation-delay: 0.2s;">
-                Mere AC se pani tapak raha hai, bohot urgent hai!
-            </div>
-            <div class="chat-bubble agent-bubble fade-up-anim" style="animation-delay: 0.4s;">
-                <div class="intent-card">
-                    <p><strong>Intent:</strong> AC Repair</p>
-                    <p><strong>Urgency:</strong> <span class="badge badge-error">Emergency</span></p>
-                </div>
-                Fikr na karain, mai abhi area mein available AC technicians dhoond raha hoon...
-            </div>
-            
-            <div class="typing-indicator fade-up-anim" style="animation-delay: 0.6s;" id="typing-indicator">
+            <!-- Chat bubbles will be injected here dynamically -->
+            <div class="typing-indicator fade-up-anim" id="typing-indicator" style="display: none;">
                 <span></span><span></span><span></span>
             </div>
         </main>
@@ -301,6 +343,23 @@
             </div>
         </div>
     </div>
+    
+    <!-- ==================== NOTIFICATION MODAL ==================== -->
+    <div id="notification-modal" class="modal">
+        <div class="modal-content slide-up-anim notification-modal">
+            <div class="modal-header">
+                <h3>Notifications</h3>
+                <button class="icon-btn" onclick="app.hideNotifications()"><i class="ph ph-x"></i></button>
+            </div>
+            <div class="notification-list" id="notification-list">
+                <!-- Notifications will be injected here -->
+            </div>
+            <div class="modal-footer">
+                <button class="btn-text" onclick="app.markAllNotificationsRead()">Mark all as read</button>
+            </div>
+        </div>
+    </div>
+    
     <section id="trace-screen" class="view">
         <div class="trace-header">
             <div class="trace-title">
@@ -330,15 +389,73 @@
             <i class="ph ph-chat-teardrop-text"></i>
             <span>Ask Munsif</span>
         </a>
-        <a href="#" class="nav-item" onclick="app.navigate('home-screen', this)">
+        <a href="#" class="nav-item" onclick="app.navigate('bookings-screen', this)">
             <i class="ph ph-calendar-check"></i>
             <span>Bookings</span>
         </a>
-        <a href="#" class="nav-item" onclick="app.navigate('home-screen', this)">
+        <a href="#" class="nav-item" onclick="app.navigate('profile-screen', this)">
             <i class="ph ph-user"></i>
             <span>Profile</span>
         </a>
     </nav>
+
+    <!-- ==================== BOOKINGS SCREEN ==================== -->
+    <section id="bookings-screen" class="view has-bottom-nav">
+        <header class="app-header">
+            <div class="header-left">
+                <h1 class="app-title">My Bookings</h1>
+            </div>
+            <div class="header-right">
+                <button class="icon-btn" onclick="app.loadBookingsList()"><i class="ph ph-arrow-clockwise"></i></button>
+            </div>
+        </header>
+        <main class="home-container">
+            <div class="booking-list" id="bookings-list-full">
+                <!-- Bookings will be injected here -->
+            </div>
+        </main>
+    </section>
+
+    <!-- ==================== PROFILE SCREEN ==================== -->
+    <section id="profile-screen" class="view has-bottom-nav">
+        <header class="app-header">
+            <div class="header-left">
+                <h1 class="app-title">Profile</h1>
+            </div>
+        </header>
+        <main class="home-container">
+            <div class="profile-card glass-card">
+                <div class="profile-header">
+                    <img src="https://ui-avatars.com/api/?name=User&background=1A56DB&color=fff" alt="Profile" class="profile-avatar" id="profile-avatar">
+                    <div class="profile-info">
+                        <h3 id="profile-name">User Name</h3>
+                        <p id="profile-email" class="text-muted">user@example.com</p>
+                    </div>
+                </div>
+                <div class="profile-stats mt-4">
+                    <div class="profile-stat">
+                        <span id="profile-bookings-count">0</span>
+                        <p>Total Bookings</p>
+                    </div>
+                    <div class="profile-stat">
+                        <span id="profile-completed-count">0</span>
+                        <p>Completed</p>
+                    </div>
+                    <div class="profile-stat">
+                        <span id="profile-rating">0.0</span>
+                        <p>Avg Rating</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="profile-actions mt-4">
+                <button class="profile-action-btn" onclick="app.logout()">
+                    <i class="ph ph-sign-out"></i>
+                    <span>Logout</span>
+                </button>
+            </div>
+        </main>
+    </section>
 
     <script src="app.js"></script>
 </body>

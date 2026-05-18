@@ -65,7 +65,7 @@ class Booking(Base):
     confirmed_slot = Column(String)                 # e.g., "Thursday, 21 May 2026 — 10:00 AM"
     price_breakdown = Column(String)                # Detailed string
     reminder_at = Column(String)                    # e.g., "Thursday, 21 May 2026 — 09:00 AM"
-    status = Column(String) # pending, confirmed, en-route, completed, cancelled
+    status = Column(String, default="pending") # pending, confirmed, en-route, completed, cancelled
     created_at = Column(DateTime, default=datetime.utcnow)
     user = relationship("User", back_populates="bookings")
 
