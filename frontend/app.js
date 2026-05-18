@@ -8,7 +8,7 @@ const app = {
     currentScreen: 'splash-screen',
     
     // API Configuration
-    apiBase: 'http://127.0.0.1:8008',
+    apiBase: 'http://127.0.0.1:8000',
     sessionId: null,
 
     // Helper for API calls
@@ -619,49 +619,162 @@ const app = {
     },
 
     initMap() {
-        // Default to Islamabad coords
-        const userLocation = { lat: 33.6844, lng: 73.0479 };
+        // Default to Karachi coords (city center)
+        const defaultLocation = { lat: 24.8607, lng: 67.0011 };
+        let userLocation = defaultLocation;
         
         this.map = new google.maps.Map(document.getElementById("map"), {
-            zoom: 13,
-            center: userLocation,
-            disableDefaultUI: true,
+            zoom: 12,
+            center: defaultLocation,
+            disableDefaultUI: false,
+            zoomControl: true,
+            mapTypeControl: false,
+            scaleControl: true,
+            streetViewControl: false,
+            rotateControl: false,
+            fullscreenControl: true,
         });
 
-        // Add User Marker
-        new google.maps.Marker({
+        // Try to get user's actual location
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    userLocation = {
+                        lat: position.coords.latitude,
+                        lng: position.coords.longitude
+                    };
+                    this.userMarker.setPosition(userLocation);
+                    this.map.setCenter(userLocation);
+                    this.map.setZoom(14);
+                    this.updateProviderMarkerAndRoute(userLocation);
+                },
+                (error) => {
+                    console.warn("Geolocation error:", error);
+                    // Use default location if geolocation fails
+                    this.updateProviderMarkerAndRoute(userLocation);
+                },
+                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+            );
+        } else {
+            console.warn("Geolocation not supported");
+            this.updateProviderMarkerAndRoute(userLocation);
+        }
+
+        // Add User Marker with custom icon
+        const userIcon = {
+            path: google.maps.SymbolPath.CIRCLE,
+            fillColor: '#0E9F6E',
+            fillOpacity: 1,
+            strokeColor: '#ffffff',
+            strokeWeight: 2,
+            scale: 12
+        };
+        
+        this.userMarker = new google.maps.Marker({
             position: userLocation,
             map: this.map,
-            title: "You are here"
-        });
-
-        // Add Provider Marker (offset slightly for demo)
-        let currentLat = userLocation.lat + 0.01;
-        let currentLng = userLocation.lng + 0.01;
-        
-        this.providerMarker = new google.maps.Marker({
-            position: { lat: currentLat, lng: currentLng },
-            map: this.map,
-            title: this.selectedProvider?.name || "Provider",
-            icon: {
-                path: google.maps.SymbolPath.CIRCLE,
-                fillColor: '#1A56DB',
-                fillOpacity: 1,
-                strokeWeight: 0,
-                scale: 10
+            title: "You are here",
+            icon: userIcon,
+            label: {
+                text: "You",
+                color: "#ffffff",
+                fontSize: "10px",
+                fontWeight: "bold"
             }
         });
+
+        // Initialize provider marker and route
+        this.updateProviderMarkerAndRoute(userLocation);
+    },
+
+    updateProviderMarkerAndRoute(userLocation) {
+        // Get provider location from selected provider
+        let providerLocation = { 
+            lat: userLocation.lat + 0.02, 
+            lng: userLocation.lng + 0.02 
+        };
+        
+        if (this.selectedProvider) {
+            // Use provider's actual coordinates if available
+            providerLocation = {
+                lat: this.selectedProvider.lat || userLocation.lat + 0.02,
+                lng: this.selectedProvider.lng || userLocation.lng + 0.02
+            };
+        }
+        
+        // Add Provider Marker with custom icon
+        const providerIcon = {
+            path: google.maps.SymbolPath.CIRCLE,
+            fillColor: '#1A56DB',
+            fillOpacity: 1,
+            strokeColor: '#ffffff',
+            strokeWeight: 2,
+            scale: 12
+        };
+        
+        this.providerMarker = new google.maps.Marker({
+            position: providerLocation,
+            map: this.map,
+            title: this.selectedProvider?.name || "Provider",
+            icon: providerIcon,
+            label: {
+                text: "P",
+                color: "#ffffff",
+                fontSize: "12px",
+                fontWeight: "bold"
+            }
+        });
+
+        // Draw route line between user and provider
+        this.routeLine = new google.maps.Polyline({
+            path: [userLocation, providerLocation],
+            geodesic: true,
+            strokeColor: '#1A56DB',
+            strokeOpacity: 0.8,
+            strokeWeight: 4,
+            icons: [{
+                icon: {
+                    path: 'M 0,-1 0,1',
+                    strokeOpacity: 1,
+                    scale: 4
+                },
+                offset: '0',
+                repeat: '20px'
+            }]
+        });
+        this.routeLine.setMap(this.map);
+
+        // Fit map to show both markers
+        const bounds = new google.maps.LatLngBounds();
+        bounds.extend(userLocation);
+        bounds.extend(providerLocation);
+        this.map.fitBounds(bounds, { top: 50, bottom: 50, left: 50, right: 50 });
             
-        // Animate provider marker towards user
+        // Animate provider marker towards user (simulating movement)
+        this.animateProviderMovement(userLocation, providerLocation);
+    },
+
+    animateProviderMovement(userLocation, providerLocation) {
         let step = 0;
+        const totalSteps = 100;
+        const startLat = providerLocation.lat;
+        const startLng = providerLocation.lng;
+        
         const interval = setInterval(() => {
-            if (step >= 100 || this.currentScreen !== 'tracking-screen') {
+            if (step >= totalSteps || this.currentScreen !== 'tracking-screen') {
                 clearInterval(interval);
                 return;
             }
-            currentLat = (userLocation.lat + 0.01) - (0.01 * step / 100);
-            currentLng = (userLocation.lng + 0.01) - (0.01 * step / 100);
+            const progress = step / totalSteps;
+            const currentLat = startLat - (startLat - userLocation.lat) * progress;
+            const currentLng = startLng - (startLng - userLocation.lng) * progress;
             this.providerMarker.setPosition({ lat: currentLat, lng: currentLng });
+            
+            // Update route line
+            if (this.routeLine) {
+                this.routeLine.setPath([userLocation, { lat: currentLat, lng: currentLng }]);
+            }
+            
             step++;
         }, 300);
     },

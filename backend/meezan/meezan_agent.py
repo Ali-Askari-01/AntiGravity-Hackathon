@@ -1,11 +1,14 @@
 import random
 import uuid
 import datetime
+import logging
 from sqlalchemy.orm import Session
 from backend.jadwal.jadwal_agent import JadwalAgent
 from backend.qeemat.qeemat_agent import QeematAgent
 from backend.insaf.insaf_agent import InsafAgent
 from backend.models import Provider, Booking, Feedback
+
+logger = logging.getLogger(__name__)
 
 class MeezanAgent:
     def __init__(self):
@@ -29,30 +32,51 @@ class MeezanAgent:
         if not provider:
             raise ValueError(f"Provider with ID {provider_id} not found.")
 
-        # 2. Final check for conflicts with Jadwal
-        # We need the ISO format for internal logic. 
-        # If confirmed_slot is human readable, we should have the ISO from the request.
-        # Let's assume for now the confirmed_slot passed here is the one used for the DB.
-        # But Jadwal needs ISO. Let's try to parse it if it's human readable, or just expect the caller to provide ISO.
-        # Actually, let's update the signature to take slot_iso.
+        # 2. Extract ISO time from confirmed_slot
+        # Frontend sends format like "Today — 2026-05-18T20:27:50.557017" or "ASAP"
+        slot_iso = None
         
-        # For the hackathon, we'll try a simple heuristic to see if confirmed_slot is ISO
-        slot_iso = confirmed_slot
-        try:
-            datetime.datetime.fromisoformat(slot_iso)
-        except:
-            # If not ISO, we'll just use a dummy current time for the DB record in this demo
-            # In a real app, the frontend sends ISO.
+        # Try to extract ISO datetime from the string
+        if "—" in confirmed_slot or "-" in confirmed_slot:
+            parts = confirmed_slot.split("—") if "—" in confirmed_slot else confirmed_slot.split("-")
+            for part in parts:
+                part = part.strip()
+                # Check if this part looks like an ISO datetime
+                if "T" in part and ":" in part:
+                    try:
+                        datetime.datetime.fromisoformat(part)
+                        slot_iso = part
+                        break
+                    except:
+                        continue
+        
+        # Fallback: try to parse the whole string
+        if not slot_iso:
+            try:
+                datetime.datetime.fromisoformat(confirmed_slot)
+                slot_iso = confirmed_slot
+            except:
+                pass
+        
+        # Final fallback to current time if parsing fails
+        if not slot_iso:
             slot_iso = datetime.datetime.now().isoformat()
+            logger.warning(f"Could not parse slot '{confirmed_slot}', using current time: {slot_iso}")
 
+        # 3. Final check for conflicts with Jadwal
         conflict, _, _ = self.jadwal.check_conflict(db, provider_id, slot_iso)
         if conflict:
-            raise ValueError("Maazrat! Ye slot ab masroof ho chuka hai. (Slot is now occupied)")
+            # Try to find next available slot
+            next_slots = self.jadwal.find_next_available_slots(db, provider_id, slot_iso)
+            if next_slots:
+                raise ValueError(f"Maazrat! Ye slot masroof hai. Available slots: {', '.join(next_slots[:2])}")
+            else:
+                raise ValueError("Maazrat! Ye slot ab masroof ho chuka hai. (Slot is now occupied)")
 
-        # 3. Generate confirmation code (XIDMAT-XXXX)
+        # 4. Generate confirmation code (XIDMAT-XXXX)
         conf_code = f"XIDMAT-{random.randint(1000, 9999)}"
 
-        # 3. Dynamic Pricing Logic (Using Qeemat Agent)
+        # 5. Dynamic Pricing Logic (Using Qeemat Agent)
         try:
             appt_time = datetime.datetime.fromisoformat(slot_iso)
         except:
@@ -70,14 +94,12 @@ class MeezanAgent:
         final_price = pricing['final_price']
         price_breakdown = pricing['trace_log']
 
-        # 4. Calculate reminder time (1 hour before)
-        # For demo, we just manipulate the string if possible, or just return a mock string
-        # The PRD example: "Thursday, 21 May 2026 — 10:00 AM" -> "09:00 AM"
+        # 6. Calculate reminder time (1 hour before)
         reminder_at = confirmed_slot.replace("10:00 AM", "09:00 AM").replace("11:00 AM", "10:00 AM")
-        if reminder_at == confirmed_slot: # fallback if time doesn't match
+        if reminder_at == confirmed_slot:
              reminder_at = "1 hour before your slot"
 
-        # 5. Save to DB
+        # 7. Save to DB
         booking = Booking(
             session_id=session_id,
             provider_id=provider_id,
@@ -93,10 +115,10 @@ class MeezanAgent:
         db.commit()
         db.refresh(booking)
 
-        # 6. Occupy the slot in Jadwal
+        # 8. Occupy the slot in Jadwal
         self.jadwal.occupy_slot(db, provider_id, slot_iso)
 
-        # 7. Return full receipt
+        # 9. Return full receipt
         return {
             "booking_id": booking.id,
             "confirmation_code": conf_code,

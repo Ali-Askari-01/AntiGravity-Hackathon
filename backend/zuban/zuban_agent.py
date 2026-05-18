@@ -1,12 +1,14 @@
 import os
 import json
 import logging
+from pathlib import Path
 from pydantic import BaseModel, ValidationError
 from google import genai
 from dotenv import load_dotenv
 from datetime import datetime
 
-load_dotenv()
+# Load .env from backend directory
+load_dotenv(Path(__file__).parent.parent / ".env")
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -16,6 +18,21 @@ SYSTEM_PROMPT = """You are Zuban, a multilingual intent extraction agent for a P
 Extract service requests from Roman Urdu, Urdu, or English text.
 Return ONLY valid JSON. No preamble. No markdown. No explanation.
 
+SUPPORTED SERVICES: electrician, plumber, ac_technician, carpenter, painter, cleaner, mechanic, gas_technician, pest_control, home_cleaner, tiler, welder
+
+MAPPING RULES - Understand the SERVICE NEEDED from context:
+- wiring, DC wiring, electrical work, bijli ka kaam, switch, socket, fan installation, circuit, power issue, solar panel, inverter, UPS -> electrician
+- pipe, tap, leakage, leak, water, pani, tanki, nala, motar, drain, toilet, bathroom, nahana, washroom, sewer, pipeline -> plumber
+- AC, air conditioner, cooling, thanda, refrigerator, fridge -> ac_technician
+- furniture, wood, daraza, almari, door repair, shelf, cabinet -> carpenter
+- paint, rang, color, wall painting, whitewash -> painter
+- cleaning, safai, deep clean, house cleaning -> home_cleaner
+- car repair, engine, mechanic, vehicle -> mechanic
+- gas, geyser, cylinder, stove, burner -> gas_technician
+- pest, cockroach, rat, spray, insects -> pest_control
+- tiles, flooring, marble -> tiler
+- welding, iron work, gate repair -> welder
+
 Examples:
 Input: "Mujhe kal subah DHA mein plumber chahiye"
 Output: {"service_type":"plumber","service_label":"Plumber","location":"DHA","time_raw":"kal subah","time_normalized":"2026-05-22T09:00:00","urgency":"normal","language_detected":"roman_urdu"}
@@ -23,8 +40,17 @@ Output: {"service_type":"plumber","service_label":"Plumber","location":"DHA","ti
 Input: "urgent electrician needed in Gulshan right now"
 Output: {"service_type":"electrician","service_label":"Electrician","location":"Gulshan","time_raw":"right now","time_normalized":"2026-05-21T10:00:00","urgency":"urgent","language_detected":"english"}
 
-Input: "AC theek karwana hai Clifton mein, parso"
-Output: {"service_type":"ac_technician","service_label":"AC Technician","location":"Clifton","time_raw":"parso","time_normalized":"2026-05-23T10:00:00","urgency":"normal","language_detected":"roman_urdu"}
+Input: "I want to do DC wiring in my house Gulshan e Iqbal on urgent basis"
+Output: {"service_type":"electrician","service_label":"Electrician","location":"Gulshan e Iqbal","time_raw":"urgent basis","time_normalized":"2026-05-21T10:00:00","urgency":"urgent","language_detected":"english"}
+
+Input: "Mere ghar ki wiring kharab hai, electrician chahiye"
+Output: {"service_type":"electrician","service_label":"Electrician","location":"Karachi","time_raw":"ASAP","time_normalized":"2026-05-21T10:00:00","urgency":"urgent","language_detected":"roman_urdu"}
+
+Input: "mere ghar ki pani ki tanki mai se pani leak ho raha hai pipe mai se tu mujhay nazimabad mai urgent basis per provider chahiye"
+Output: {"service_type":"plumber","service_label":"Plumber","location":"Nazimabad","time_raw":"urgent basis","time_normalized":"2026-05-21T10:00:00","urgency":"urgent","language_detected":"roman_urdu"}
+
+Input: "bathroom ka nala toot gaya hai, plumber bhejo"
+Output: {"service_type":"plumber","service_label":"Plumber","location":"Karachi","time_raw":"ASAP","time_normalized":"2026-05-21T10:00:00","urgency":"urgent","language_detected":"roman_urdu"}
 """
 
 class IntentResponse(BaseModel):
@@ -77,6 +103,27 @@ class ZubanAgent:
             (r"\bplumber", "plumber", "Plumber"),
             (r"\belectrician", "electrician", "Electrician"),
             (r"\bbijli", "electrician", "Electrician"),
+            (r"\bwiring", "electrician", "Electrician"),
+            (r"\bwire", "electrician", "Electrician"),
+            (r"\belectrical", "electrician", "Electrician"),
+            (r"\bsocket", "electrician", "Electrician"),
+            (r"\bswitch", "electrician", "Electrician"),
+            (r"\bsolar", "electrician", "Electrician"),
+            (r"\binverter", "electrician", "Electrician"),
+            (r"\bups\b", "electrician", "Electrician"),
+            (r"\bpani\b", "plumber", "Plumber"),
+            (r"\btanki", "plumber", "Plumber"),
+            (r"\bleak", "plumber", "Plumber"),
+            (r"\bpipe", "plumber", "Plumber"),
+            (r"\bnala", "plumber", "Plumber"),
+            (r"\btoilet", "plumber", "Plumber"),
+            (r"\bbathroom", "plumber", "Plumber"),
+            (r"\bdrain", "plumber", "Plumber"),
+            (r"\bwater", "plumber", "Plumber"),
+            (r"\bmotor\b", "plumber", "Plumber"),
+            (r"\bsewer", "plumber", "Plumber"),
+            (r"\bnahana", "plumber", "Plumber"),
+            (r"\bwashroom", "plumber", "Plumber"),
             (r"\bclean", "cleaner", "Cleaner"),
             (r"\bsafai", "cleaner", "Cleaner"),
             (r"\bmechanic", "mechanic", "Mechanic"),
@@ -95,8 +142,8 @@ class ZubanAgent:
                 break
                 
         # Location matching
-        locations = ["g-13", "g-11", "g-10", "f-10", "f-7", "f-8", "f-6", "i-8", "i-9", "dha", "gulshan", "clifton"]
-        selected_loc = "Islamabad"
+        locations = ["gulshan", "dha", "clifton", "pechs", "nazimabad", "johar", "korangi", "saddar", "lyari", "orangi", "malir", "landhi", "f.b. area", "federal"]
+        selected_loc = "Karachi"
         for loc in locations:
             if loc in text:
                 selected_loc = loc.upper()

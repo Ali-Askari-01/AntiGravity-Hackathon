@@ -2,12 +2,14 @@ import os
 import math
 import logging
 import requests
+from pathlib import Path
 from typing import List, Dict, Any
 from sqlalchemy.orm import Session
 from backend.models import Provider
 from dotenv import load_dotenv
 
-load_dotenv()
+# Load .env from backend directory
+load_dotenv(Path(__file__).parent.parent / ".env")
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -55,8 +57,8 @@ def geocode_location(location: str) -> tuple[float, float] | None:
         logger.warning("GOOGLE_MAPS_API_KEY not set — falling back to default Islamabad coords.")
         return None
 
-    # Add "Islamabad, Pakistan" context for better results
-    query = f"{location}, Islamabad, Pakistan"
+    # Add "Karachi, Pakistan" context for better results
+    query = f"{location}, Karachi, Pakistan"
     url = "https://maps.googleapis.com/maps/api/geocode/json"
     params = {"address": query, "key": MAPS_API_KEY}
 
@@ -75,15 +77,23 @@ def geocode_location(location: str) -> tuple[float, float] | None:
 
 class KhojiAgent:
 
-    # Fallback coords for known Islamabad sectors (if Maps API unavailable)
+    # Fallback coords for known Karachi/Islamabad sectors (if Maps API unavailable)
     SECTOR_COORDS = {
+        # Karachi locations
+        "gulshan": (24.9200, 67.0950), "gulshan-e-iqbal": (24.9200, 67.0950),
+        "dha": (24.8100, 67.0700), "clifton": (24.8138, 67.0300),
+        "pechs": (24.8700, 67.0450), "north nazimabad": (24.9430, 67.0430),
+        "f.b. area": (24.9350, 67.0600), "johar": (24.9060, 67.1180),
+        "korangi": (24.8280, 67.1280), "saddar": (24.8610, 67.0100),
+        "lyari": (24.8670, 67.0040), "orangi": (24.9550, 67.0050),
+        "nazimabad": (24.9190, 67.0350), "malir": (24.8920, 67.1940),
+        "landhi": (24.8550, 67.1640),
+        # Islamabad locations
         "g-13": (33.6938, 72.9797), "g13": (33.6938, 72.9797),
         "g-11": (33.6844, 73.0064), "g-10": (33.6892, 73.0189),
         "f-10": (33.7078, 73.0209), "f-6":  (33.7294, 73.0909),
         "f-7":  (33.7240, 73.0788), "f-8":  (33.7203, 73.0627),
         "i-8":  (33.6748, 73.0565), "i-9":  (33.6613, 73.0468),
-        "dha":  (33.5651, 73.1651), "gulshan": (33.6844, 73.0950),
-        "clifton": (24.8138, 67.0300),
     }
 
     def _get_user_coords(self, location: str) -> tuple[float, float]:
@@ -93,11 +103,39 @@ class KhojiAgent:
             return coords
 
         key = location.lower().strip()
+        
+        # Check for partial matches in sector coords
+        for sector_key, sector_coords in self.SECTOR_COORDS.items():
+            if sector_key in key or key in sector_key:
+                return sector_coords
+        
         if key in self.SECTOR_COORDS:
             return self.SECTOR_COORDS[key]
 
-        logger.warning(f"Unknown location '{location}' — defaulting to Islamabad centre.")
-        return (33.6844, 73.0479)  # Islamabad centre
+        logger.warning(f"Unknown location '{location}' — defaulting to Karachi centre.")
+        return (24.8607, 67.0011)  # Karachi centre
+
+    def get_real_distance(self, origin_lat: float, origin_lng: float, dest_lat: float, dest_lng: float) -> float | None:
+        """Get real driving distance using Google Maps Distance Matrix API."""
+        if not MAPS_API_KEY:
+            return None
+        
+        url = "https://maps.googleapis.com/maps/api/distancematrix/json"
+        params = {
+            "origins": f"{origin_lat},{origin_lng}",
+            "destinations": f"{dest_lat},{dest_lng}",
+            "key": MAPS_API_KEY,
+            "mode": "driving"
+        }
+        
+        try:
+            resp = requests.get(url, params=params, timeout=3)
+            data = resp.json()
+            if data.get("status") == "OK" and data["rows"][0]["elements"][0]["status"] == "OK":
+                return data["rows"][0]["elements"][0]["distance"]["value"] / 1000  # Convert to km
+        except Exception as e:
+            logger.debug(f"Distance Matrix fallback: {e}")
+        return None
 
     def find_providers(
         self,
@@ -113,20 +151,47 @@ class KhojiAgent:
         trace_lines = [f"Searching for {service_type} in {location}..."]
 
         all_providers = db.query(Provider).all()
+        
+        # Step 1: Find providers with matching skills
         matched = [
             p for p in all_providers
             if p.skills and service_type.lower() in [s.lower() for s in p.skills]
         ]
 
+        # Step 2: If no exact match, find nearest providers with similar skills
         if not matched:
-            trace_lines.append(f"No providers found for {service_type}.")
-            return {
-                "status": "failed",
-                "message": f"Maazrat, {service_type} ka koi provider available nahi mila.",
-                "trace": trace_lines
+            trace_lines.append(f"No exact {service_type} providers found. Searching for nearest alternatives...")
+            
+            # Define skill similarity groups
+            skill_groups = {
+                "electrician": ["electrician", "welder"],
+                "plumber": ["plumber", "gas_technician"],
+                "ac_technician": ["ac_technician", "gas_technician"],
+                "carpenter": ["carpenter", "painter"],
+                "painter": ["painter", "carpenter"],
+                "cleaner": ["home_cleaner", "pest_control"],
+                "mechanic": ["mechanic"],
+                "gas_technician": ["gas_technician", "plumber"],
+                "pest_control": ["pest_control", "home_cleaner"],
+                "home_cleaner": ["home_cleaner", "pest_control"],
+                "tiler": ["tiler", "carpenter"],
+                "welder": ["welder", "electrician"],
             }
+            
+            similar_skills = skill_groups.get(service_type.lower(), [service_type])
+            matched = [
+                p for p in all_providers
+                if p.skills and any(s.lower() in [sk.lower() for sk in p.skills] for s in similar_skills)
+            ]
+            
+            if matched:
+                trace_lines.append(f"Found {len(matched)} providers with similar skills.")
+            else:
+                trace_lines.append("No similar providers found. Showing nearest available providers.")
+                matched = all_providers
 
-        trace_lines.append(f"Found {len(matched)} providers. Applying 6-factor ranking...")
+        # Step 3: Calculate distances and score all matched providers
+        trace_lines.append(f"Found {len(matched)} providers. Calculating distances and ranking...")
 
         scored = []
         for p in matched:
@@ -135,7 +200,26 @@ class KhojiAgent:
                 "rating": p.rating, "available": p.is_available,
                 "experience": p.experience,
             }
-            score, dist_km = score_provider(pdict, user_lat, user_lng, urgency)
+            
+            # Use haversine distance (Google Maps API fallback if available)
+            dist_km = haversine(user_lat, user_lng, p.lat, p.lng)
+            
+            # Recalculate score with actual distance
+            max_distance = 15.0  # Increased search radius
+            distance_score = 1 - min(dist_km / max_distance, 1.0)
+            rating_score = (pdict["rating"] - 1) / 4
+            availability = 1.0 if pdict["available"] else 0.0
+            experience = min(pdict["experience"] / 10, 1.0)
+            urgency_bonus = 0.1 if urgency == "urgent" and pdict["available"] else 0.0
+            trust_score = rating_score * 0.6 + experience * 0.4
+            
+            score = (0.35 * distance_score
+                     + 0.30 * trust_score
+                     + 0.20 * availability
+                     + 0.10 * experience
+                     + 0.05 * urgency_bonus)
+            score = round(score, 4)
+            dist_km = round(dist_km, 2)
 
             avail_label = "YES" if p.is_available else "NO"
             line = (f"{p.name}: score={score}, dist={dist_km}km, rating={p.rating}, avail={avail_label}")
@@ -151,6 +235,8 @@ class KhojiAgent:
                 "available": p.is_available,
                 "base_price": p.base_price,
                 "location": p.location,
+                "lat": p.lat,
+                "lng": p.lng,
                 "rationale": self._build_rationale(p, score, dist_km, urgency),
             })
 
@@ -162,12 +248,21 @@ class KhojiAgent:
             winner = top_3[0]
             trace_lines.append(f"Selected: {winner['name']} — {winner['rationale']}")
 
+        # Build appropriate message
+        if len(matched) > 0:
+            if len(scored) == len(matched):
+                message = f"Humne {len(top_3)} behtareen providers dhoond liye hain."
+            else:
+                message = f"Exact {service_type} provider nahi mila, lekin yeh nearest alternatives hain:"
+        else:
+            message = f"Maazrat, {service_type} ka koi provider available nahi mila."
+
         return {
-            "status": "success",
+            "status": "success" if top_3 else "failed",
             "user_location": {"lat": user_lat, "lng": user_lng},
             "total_found": len(matched),
             "top_providers": top_3,
-            "message": f"Humne {len(top_3)} behtareen providers dhoond liye hain.",
+            "message": message,
             "trace": trace_lines,
         }
 

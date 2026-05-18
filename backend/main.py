@@ -38,6 +38,9 @@ app = FastAPI(title="Antigravity Agents API — Powered by Google ADK", lifespan
 origins = [
     "http://localhost:8000",
     "http://127.0.0.1:8000",
+    "http://localhost:5500",
+    "http://127.0.0.1:5500",
+    "*",
 ]
 
 app.add_middleware(
@@ -219,7 +222,7 @@ async def search_providers_endpoint(req: SearchRequest, db: Session = Depends(ge
         providers_list = []
         for step in adk_result.get("trace", []):
             if step.get("tool_name") == "get_providers_from_db" and "tool_result" in step:
-                providers_list = step.get("tool_result", {}).get("matched_providers", [])
+                providers_list = step.get("tool_result", {}).get("top_providers", [])
                 break # Found the providers, no need to look further
 
         # The new Khoji agent should provide a rationale in its final response.
@@ -299,42 +302,6 @@ async def get_pricing(req: PricingRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail="ADK not available.")
 
     session_id = f"price_{req.provider_id}_{datetime.datetime.now().timestamp()}"
-<<<<<<< Updated upstream
-    adk_result = adk.run_qeemat(session_id, req.provider_id, req.urgency, req.distance_km, req.is_peak)
-
-    # Parse final_price from the Qeemat tool result in the trace
-    final_price = 0.0
-    breakdown = {}
-    for step in adk_result.get("trace", []):
-        if step.get("tool_name") == "get_provider_pricing_details":
-            tool_result = step.get("tool_result", {})
-            if isinstance(tool_result, dict) and "base_rate" in tool_result:
-                base = tool_result.get("base_rate", 0.0)
-                rating = tool_result.get("rating", 5.0)
-                exp = tool_result.get("experience_years", 1)
-                urgency_surcharge = 500.0 if req.urgency == "urgent" else 0.0
-                distance_fee = req.distance_km * 50.0
-                peak_fee = 300.0 if req.is_peak else 0.0
-                quality_premium = 200.0 if rating >= 4.5 else 0.0
-                experience_factor = exp * 100.0
-                final_price = round(base + urgency_surcharge + distance_fee + peak_fee + quality_premium + experience_factor, 2)
-                breakdown = {
-                    "base_rate": base,
-                    "urgency_surcharge": urgency_surcharge,
-                    "distance_fee": distance_fee,
-                    "peak_hour_fee": peak_fee,
-                    "quality_premium": quality_premium,
-                    "experience_factor": experience_factor,
-                    "total": final_price,
-                }
-
-    return {
-        "final_price": final_price,
-        "breakdown": breakdown,
-        "message": adk_result.get("response", ""),
-        "trace": [s.get("action") for s in adk_result.get("trace", [])]
-    }
-=======
     
     try:
         adk_result = await adk.run_qeemat(session_id, req.provider_id, req.urgency, req.distance_km, req.is_peak)
@@ -358,7 +325,6 @@ async def get_pricing(req: PricingRequest, db: Session = Depends(get_db)):
     except Exception as e:
         logger.error(f"ADK Qeemat error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
->>>>>>> Stashed changes
 
 
 @app.post("/book")
@@ -398,13 +364,19 @@ async def create_booking(req: BookingRequest, db: Session = Depends(get_db)):
         )
         _push_trace(session_id, meezan_result.get("trace", []))
         
+        # Check if Meezan returned an error
+        if "failed" in meezan_result.get("response", "").lower() or "error" in meezan_result.get("response", "").lower():
+            raise ValueError(meezan_result.get("response", "Booking failed"))
+        
         # 3. Extract confirmation details from Meezan's tool call
         booking_id = None
         confirmation_code = None
+        price_breakdown_str = ""
         for step in meezan_result.get("trace", []):
             if step.get("tool_name") == "create_booking" and "tool_result" in step:
                 booking_id = step["tool_result"].get("booking_id")
                 confirmation_code = step["tool_result"].get("confirmation_code")
+                price_breakdown_str = step["tool_result"].get("price_breakdown", "")
                 break
         
         if not booking_id or not confirmation_code:
@@ -418,7 +390,7 @@ async def create_booking(req: BookingRequest, db: Session = Depends(get_db)):
             "confirmation_code": confirmation_code,
             "message": meezan_result.get("response", "Booking confirmed!"),
             "final_price": price,
-            "price_breakdown": price_breakdown,
+            "price_breakdown": price_breakdown_str,
             "provider_name": p.name if p else "Provider",
             "provider_rating": p.rating if p else 5.0,
             "distance_km": req.distance_km,
