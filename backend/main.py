@@ -1,20 +1,22 @@
 """
 Antigravity FastAPI — All agent calls go through the Google ADK pipeline.
 """
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List
 import contextlib
 import datetime
 import logging
 import uuid
+import hashlib
+import secrets
 
 from backend.database import engine, get_db, SessionLocal
 from backend import models
+
 from backend.munsif.munsif_agent import MunsifAgent        # session/workplan manager
 from backend.meezan.meezan_agent import MeezanAgent        # fallback for feedback/dispute
-
-from fastapi.middleware.cors import CORSMiddleware
 
 logger = logging.getLogger(__name__)
 
@@ -51,9 +53,63 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.get("/")
-def read_root():
-    return {"status": "success", "message": "Antigravity Backend is running!"}
+# ── Simple Token-based Auth (Hackathon Demo) ──────────────────────────────────
+# In-memory token store for demo purposes
+active_tokens = {}
+
+def hash_password(password: str) -> str:
+    return hashlib.sha256(password.encode()).hexdigest()
+
+def generate_token() -> str:
+    return secrets.token_urlsafe(32)
+
+def get_current_user(token: str = None, db: SessionLocal = Depends(get_db)):
+    """Simple token-based auth for demo"""
+    if not token:
+        return None
+    user_data = active_tokens.get(token)
+    if not user_data:
+        return None
+    # Check if token is expired (24 hours)
+    if datetime.datetime.utcnow() - user_data["created_at"] > datetime.timedelta(hours=24):
+        del active_tokens[token]
+        return None
+    return user_data
+
+# ── Simple Rate Limiting Middleware (Hackathon Demo) ───────────────────────────
+from collections import defaultdict
+import time
+
+rate_limit_store = defaultdict(list)
+RATE_LIMIT = 100  # requests per minute
+RATE_LIMIT_WINDOW = 60  # seconds
+
+@app.middleware("http")
+async def rate_limit_middleware(request, call_next):
+    """Simple rate limiting middleware"""
+    client_ip = request.client.host
+    current_time = time.time()
+    
+    # Clean old entries
+    rate_limit_store[client_ip] = [
+        t for t in rate_limit_store[client_ip] 
+        if current_time - t < RATE_LIMIT_WINDOW
+    ]
+    
+    # Check rate limit
+    if len(rate_limit_store[client_ip]) >= RATE_LIMIT:
+        from fastapi.responses import JSONResponse
+        return JSONResponse(
+            status_code=429,
+            content={"detail": "Too many requests. Please try again later."}
+        )
+    
+    # Add current request
+    rate_limit_store[client_ip].append(current_time)
+    
+    response = await call_next(request)
+    return response
+
 
 # Always-on orchestrator (manages sessions, workplan)
 munsif = MunsifAgent()
@@ -106,6 +162,27 @@ class PricingRequest(BaseModel):
     urgency: Optional[str] = "normal"
     distance_km: Optional[float] = 1.0
     is_peak: Optional[bool] = False
+
+# Auth schemas
+class LoginRequest(BaseModel):
+    phone: str
+    password: str
+
+class RegisterRequest(BaseModel):
+    name: str
+    phone: str
+    email: Optional[str] = None
+    password: str
+    role: Optional[str] = "user"
+
+class TokenResponse(BaseModel):
+    token: str
+    user: dict
+
+
+@app.get("/")
+def read_root():
+    return {"status": "success", "message": "Antigravity Backend is running!"}
 
 
 # ── Helper: push ADK trace into our SQLite workplan ────────────────────────────
@@ -494,9 +571,11 @@ async def raise_dispute(req: DisputeRequest, db: Session = Depends(get_db)):
 
 # ── Read-only utility endpoints ─────────────────────────────────────────────────
 @app.get("/bookings")
-def list_bookings(db=Depends(get_db)):
-    bookings = db.query(models.Booking).order_by(models.Booking.id.desc()).all()
-    return bookings
+def list_bookings(skip: int = 0, limit: int = 20, db=Depends(get_db)):
+    """List bookings with pagination"""
+    bookings = db.query(models.Booking).order_by(models.Booking.id.desc()).offset(skip).limit(limit).all()
+    total = db.query(models.Booking).count()
+    return {"bookings": bookings, "total": total, "skip": skip, "limit": limit}
 
 @app.get("/booking/{booking_id}")
 def get_booking(booking_id: int, db=Depends(get_db)):
@@ -513,13 +592,247 @@ def get_session(session_id: str):
     return session
 
 @app.get("/providers")
-def list_providers(db=Depends(get_db)):
-    providers = db.query(models.Provider).all()
-    return [
-        {"id": p.id, "name": p.name, "skills": p.skills, "location": p.location,
-         "rating": p.rating, "experience": p.experience, "available": p.is_available}
-        for p in providers
-    ]
+def list_providers(
+    skip: int = 0, 
+    limit: int = 20, 
+    skill: Optional[str] = None,
+    location: Optional[str] = None,
+    min_rating: Optional[float] = None,
+    db=Depends(get_db)
+):
+    """List providers with pagination and filters"""
+    query = db.query(models.Provider)
+    
+    # Apply filters
+    if skill:
+        # SQLite doesn't support contains well, use like
+        query = query.filter(models.Provider.skills.like(f"%{skill.lower()}%"))
+    if location:
+        query = query.filter(models.Provider.location.like(f"%{location}%"))
+    if min_rating:
+        query = query.filter(models.Provider.rating >= min_rating)
+    
+    total = query.count()
+    providers = query.offset(skip).limit(limit).all()
+    
+    return {
+        "providers": [
+            {"id": p.id, "name": p.name, "skills": p.skills, "location": p.location,
+             "rating": p.rating, "experience": p.experience, "available": p.is_available,
+             "lat": p.lat, "lng": p.lng, "base_price": p.base_price,
+             "is_verified": p.is_verified}
+            for p in providers
+        ],
+        "total": total,
+        "skip": skip,
+        "limit": limit
+    }
+
+# ── Authentication Endpoints ────────────────────────────────────────────────────
+@app.post("/auth/register")
+def register_user(req: RegisterRequest, db=Depends(get_db)):
+    """Register a new user"""
+    # Check if phone already exists
+    existing = db.query(models.User).filter(models.User.phone == req.phone).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Phone number already registered")
+    
+    # Create new user
+    user = models.User(
+        name=req.name,
+        phone=req.phone,
+        email=req.email,
+        password_hash=hash_password(req.password),
+        role=req.role
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    
+    # Generate token
+    token = generate_token()
+    active_tokens[token] = {
+        "id": user.id,
+        "name": user.name,
+        "phone": user.phone,
+        "role": user.role,
+        "created_at": datetime.datetime.utcnow()
+    }
+    
+    return {
+        "token": token,
+        "user": {
+            "id": user.id,
+            "name": user.name,
+            "phone": user.phone,
+            "role": user.role
+        }
+    }
+
+@app.post("/auth/login")
+def login_user(req: LoginRequest, db=Depends(get_db)):
+    """Login user with phone and password"""
+    user = db.query(models.User).filter(models.User.phone == req.phone).first()
+    if not user or user.password_hash != hash_password(req.password):
+        raise HTTPException(status_code=401, detail="Invalid phone or password")
+    
+    # Update last login
+    user.last_login = datetime.datetime.utcnow()
+    db.commit()
+    
+    # Generate token
+    token = generate_token()
+    active_tokens[token] = {
+        "id": user.id,
+        "name": user.name,
+        "phone": user.phone,
+        "role": user.role,
+        "created_at": datetime.datetime.utcnow()
+    }
+    
+    return {
+        "token": token,
+        "user": {
+            "id": user.id,
+            "name": user.name,
+            "phone": user.phone,
+            "role": user.role
+        }
+    }
+
+@app.get("/auth/me")
+def get_current_user_info(token: str = None, db=Depends(get_db)):
+    """Get current user info"""
+    user_data = get_current_user(token, db)
+    if not user_data:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return user_data
+
+@app.post("/auth/logout")
+def logout_user(token: str = None):
+    """Logout user"""
+    if token and token in active_tokens:
+        del active_tokens[token]
+    return {"status": "success", "message": "Logged out successfully"}
+
+# ── WebSocket for Real-time Tracking ───────────────────────────────────────────
+@app.websocket("/ws/tracking/{booking_id}")
+async def websocket_tracking(websocket: WebSocket, booking_id: int):
+    """WebSocket endpoint for real-time booking tracking"""
+    await websocket.accept()
+    try:
+        while True:
+            # Send mock tracking updates every 2 seconds
+            import asyncio
+            await asyncio.sleep(2)
+            await websocket.send_json({
+                "booking_id": booking_id,
+                "status": "EN_ROUTE",
+                "eta_minutes": max(1, 10 - int(datetime.datetime.utcnow().timestamp()) % 10),
+                "provider_location": {"lat": 24.8607, "lng": 67.0011}
+            })
+    except WebSocketDisconnect:
+        logger.info(f"Client disconnected from tracking WebSocket for booking {booking_id}")
+
+# ── Notification Endpoints ──────────────────────────────────────────────────────
+@app.get("/notifications")
+def get_notifications(user_id: int = None, skip: int = 0, limit: int = 20, db=Depends(get_db)):
+    """Get user notifications"""
+    query = db.query(models.Notification)
+    if user_id:
+        query = query.filter(models.Notification.user_id == user_id)
+    
+    total = query.count()
+    notifications = query.order_by(models.Notification.created_at.desc()).offset(skip).limit(limit).all()
+    
+    return {
+        "notifications": notifications,
+        "total": total,
+        "unread": query.filter(models.Notification.is_read == False).count()
+    }
+
+@app.post("/notifications/{notification_id}/read")
+def mark_notification_read(notification_id: int, db=Depends(get_db)):
+    """Mark notification as read"""
+    notification = db.query(models.Notification).filter(models.Notification.id == notification_id).first()
+    if not notification:
+        raise HTTPException(status_code=404, detail="Notification not found")
+    
+    notification.is_read = True
+    db.commit()
+    return {"status": "success"}
+
+# ── Analytics Endpoints ────────────────────────────────────────────────────────
+@app.get("/analytics/stats")
+def get_analytics(db=Depends(get_db)):
+    """Get simple analytics stats"""
+    try:
+        total_bookings = db.query(models.Booking).count()
+        completed_bookings = db.query(models.Booking).filter(models.Booking.status == "completed").count()
+        total_providers = db.query(models.Provider).count()
+        active_providers = db.query(models.Provider).filter(models.Provider.is_available == True).count()
+        total_users = db.query(models.User).count()
+        
+        # Average rating
+        feedbacks = db.query(models.Feedback).all()
+        avg_rating = 0
+        if feedbacks:
+            avg_rating = sum([f.rating for f in feedbacks]) / len(feedbacks)
+        
+        return {
+            "total_bookings": total_bookings,
+            "completed_bookings": completed_bookings,
+            "completion_rate": round(completed_bookings / total_bookings * 100, 2) if total_bookings > 0 else 0,
+            "total_providers": total_providers,
+            "active_providers": active_providers,
+            "total_users": total_users,
+            "average_rating": round(avg_rating, 2)
+        }
+    except Exception as e:
+        logger.error(f"Analytics error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/analytics/bookings-by-status")
+def bookings_by_status(db=Depends(get_db)):
+    """Get bookings grouped by status"""
+    statuses = db.query(models.Booking.status, models.func.count(models.Booking.id)).group_by(models.Booking.status).all()
+    return {status: count for status, count in statuses}
+
+@app.get("/analytics/popular-services")
+def popular_services(db=Depends(get_db)):
+    """Get most booked services"""
+    services = db.query(models.Booking.service_type, models.func.count(models.Booking.id)).group_by(models.Booking.service_type).order_by(models.func.count(models.Booking.id).desc()).limit(10).all()
+    return {service: count for service, count in services}
+
+# ── File Upload Endpoint ───────────────────────────────────────────────────────
+@app.post("/upload")
+async def upload_file():
+    """Simple file upload endpoint (demo)"""
+    # For demo, we'll just return a mock URL
+    # In production, you'd save to cloud storage
+    return {
+        "status": "success",
+        "url": "https://example.com/uploads/mock-file.jpg",
+        "message": "File uploaded successfully (demo mode)"
+    }
+
+# ── Provider Verification Endpoints ────────────────────────────────────────────
+@app.put("/providers/{provider_id}/verify")
+def verify_provider(provider_id: int, status: str = "verified", db=Depends(get_db)):
+    """Update provider verification status (admin only in production)"""
+    provider = db.query(models.Provider).filter(models.Provider.id == provider_id).first()
+    if not provider:
+        raise HTTPException(status_code=404, detail="Provider not found")
+    
+    provider.is_verified = status == "verified"
+    provider.verification_status = status
+    db.commit()
+    
+    return {
+        "status": "success",
+        "provider_id": provider_id,
+        "verification_status": status
+    }
 
 @app.get("/health")
 def health():

@@ -1,13 +1,31 @@
-from sqlalchemy import Column, Integer, String, Float, Boolean, JSON
+from sqlalchemy import Column, Integer, String, Float, Boolean, JSON, DateTime, ForeignKey
+from sqlalchemy.orm import relationship
+from datetime import datetime
 from backend.database import Base
+
+class User(Base):
+    __tablename__ = "users"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, index=True)
+    phone = Column(String, unique=True, index=True)
+    email = Column(String, unique=True, index=True, nullable=True)
+    password_hash = Column(String)  # Simple hash for demo
+    role = Column(String, default="user")  # user, provider, admin
+    is_verified = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    last_login = Column(DateTime, nullable=True)
+    bookings = relationship("Booking", back_populates="user")
 
 class Session(Base):
     __tablename__ = "sessions"
     
     id = Column(String, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     status = Column(String, default="active")
     workplan = Column(JSON, default=[])
     context = Column(JSON, default={})
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 class Provider(Base):
     __tablename__ = "providers"
@@ -29,11 +47,16 @@ class Provider(Base):
     review_count = Column(Integer, default=0)
     skill_level = Column(Integer, default=1)
     capacity = Column(Integer, default=5)
+    is_verified = Column(Boolean, default=True)  # Provider verification status
+    verification_status = Column(String, default="verified")  # pending, verified, rejected
+    documents = Column(JSON, default=[])  # List of document URLs
+    service_areas = Column(JSON, default=[])  # List of areas served
 
 class Booking(Base):
     __tablename__ = "bookings"
     
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     session_id = Column(String, index=True)
     provider_id = Column(Integer, index=True)
     service_type = Column(String)
@@ -42,7 +65,9 @@ class Booking(Base):
     confirmed_slot = Column(String)                 # e.g., "Thursday, 21 May 2026 — 10:00 AM"
     price_breakdown = Column(String)                # Detailed string
     reminder_at = Column(String)                    # e.g., "Thursday, 21 May 2026 — 09:00 AM"
-    status = Column(String) # pending, confirmed, en-route, completed
+    status = Column(String) # pending, confirmed, en-route, completed, cancelled
+    created_at = Column(DateTime, default=datetime.utcnow)
+    user = relationship("User", back_populates="bookings")
 
 class Schedule(Base):
     __tablename__ = "schedules"
@@ -52,6 +77,7 @@ class Schedule(Base):
     slot_start = Column(String) # ISO format
     slot_end = Column(String)   # ISO format
     status = Column(String)     # occupied, available
+    booking_id = Column(Integer, nullable=True)  # Link to booking
 
 class Feedback(Base):
     __tablename__ = "feedback"
@@ -64,6 +90,7 @@ class Feedback(Base):
     work_quality = Column(Boolean)
     cleanliness = Column(Boolean)
     comment = Column(String)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 class Dispute(Base):
     __tablename__ = "disputes"
@@ -74,3 +101,16 @@ class Dispute(Base):
     description = Column(String)
     resolution = Column(String)
     status = Column(String, default="pending") # pending, resolved
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class Notification(Base):
+    __tablename__ = "notifications"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, nullable=True)
+    provider_id = Column(Integer, nullable=True)
+    booking_id = Column(Integer, nullable=True)
+    type = Column(String)  # booking_confirmed, status_update, reminder, dispute
+    message = Column(String)
+    is_read = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
