@@ -630,6 +630,14 @@ p { line-height: 1.5; font-size: 16px; }
     font-size: 0.85rem;
     border-left: 3px solid var(--primary);
 }
+.intent-card p {
+    margin: 3px 0;
+}
+.intent-card p:last-child {
+    margin-top: 4px;
+    padding-top: 4px;
+    border-top: 1px dashed rgba(0,0,0,0.1);
+}
 
 .typing-indicator {
     display: flex; gap: 4px; padding: 12px 16px;

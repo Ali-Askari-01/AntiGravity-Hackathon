@@ -35,7 +35,9 @@ URGENCY MAPPING:
 - kal, tomorrow, later, koi jaldi nahi → "normal"
 - flexible, koi masla nahi, jab aap chahain → "flexible"
 
-LOCATION: Extract the neighborhood/area name. Common Karachi areas: DHA, Gulshan, Clifton, PECHS, Nazimabad, Johar, Korangi, Saddar, Lyari, Malir, Landhi, F.B. Area, North Nazimabad, Bahadurabad, Burns Garden, Orangi. Default to "Karachi" if no location mentioned.
+LOCATION: Extract the neighborhood/area name. Common Karachi areas: DHA, Gulshan, Clifton, PECHS, Nazimabad, Johar, Korangi, Saddar, Lyari, Malir, Landhi, F.B. Area, North Nazimabad, Bahadurabad, Burns Garden, Orangi, Buffer Zone, North Karachi, Water Pump, Boat Basin, Sea View, Zamzama, Tariq Road, Shah Faisal, Garden, Liaquatabad, Keamari, SITE. Default to "Karachi" if no location mentioned.
+
+If the user's GPS coordinates are provided in parentheses at the end, use them to infer the area but still return the area name in the location field.
 
 Examples:
 Input: "Mujhe kal subah DHA mein plumber chahiye"

@@ -53,20 +53,7 @@ const app = {
     init() {
         console.log("XIDMAT.AI App Initialized");
         
-        // Capture user GPS location immediately
-        if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(
-                (position) => {
-                    this._userGpsLat = position.coords.latitude;
-                    this._userGpsLng = position.coords.longitude;
-                    console.log(`GPS acquired: ${this._userGpsLat}, ${this._userGpsLng}`);
-                },
-                (error) => {
-                    console.warn("GPS error:", error.message);
-                },
-                { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 }
-            );
-        }
+        this._watchGpsLocation();
         
         // Check for stored auth token
         const storedToken = localStorage.getItem('authToken');
@@ -100,6 +87,74 @@ const app = {
                 }
             });
         }
+    },
+
+    _watchGpsLocation() {
+        if (!navigator.geolocation) {
+            console.warn("Geolocation not supported");
+            return;
+        }
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                this._userGpsLat = position.coords.latitude;
+                this._userGpsLng = position.coords.longitude;
+                console.log(`GPS acquired: ${this._userGpsLat}, ${this._userGpsLng}`);
+                this._updateLocationDisplay();
+            },
+            (error) => {
+                console.warn("GPS error:", error.message);
+            },
+            { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 }
+        );
+        try {
+            this._gpsWatchId = navigator.geolocation.watchPosition(
+                (position) => {
+                    this._userGpsLat = position.coords.latitude;
+                    this._userGpsLng = position.coords.longitude;
+                    this._updateLocationDisplay();
+                },
+                (error) => {
+                    console.warn("GPS watch error:", error.message);
+                },
+                { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 }
+            );
+        } catch (e) {
+            console.warn("GPS watchPosition not available");
+        }
+    },
+
+    _updateLocationDisplay() {
+        const locationBadge = document.getElementById('location-badge');
+        if (locationBadge && this._userGpsLat && this._userGpsLng) {
+            locationBadge.style.display = 'inline-flex';
+        }
+        const locationText = document.getElementById('user-location-text');
+        if (locationText && this._userGpsLat && this._userGpsLng) {
+            locationText.textContent = `${this._userGpsLat.toFixed(4)}, ${this._userGpsLng.toFixed(4)}`;
+        }
+    },
+
+    async _refreshGps() {
+        return new Promise((resolve) => {
+            if (!navigator.geolocation) {
+                resolve();
+                return;
+            }
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    this._userGpsLat = position.coords.latitude;
+                    this._userGpsLng = position.coords.longitude;
+                    console.log(`GPS refreshed: ${this._userGpsLat}, ${this._userGpsLng}`);
+                    this._updateLocationDisplay();
+                    resolve();
+                },
+                (error) => {
+                    console.warn("GPS refresh error:", error.message);
+                    resolve();
+                },
+                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+            );
+        });
     },
 
     // Toggle between login and register forms
@@ -526,9 +581,11 @@ const app = {
         this.onInput(input);
     },
 
-    processRequest() {
+    async processRequest() {
         const input = document.getElementById('home-request-input');
         if (input.value.trim() === '') return;
+        
+        await this._refreshGps();
         
         const messageText = input.value;
         this.navigate('chat-screen');
@@ -620,14 +677,20 @@ const app = {
     async searchProviders(intent) {
         this.addAgentResponse("Theek hai! Mai behtareen providers dhoond raha hoon...");
         
+        await this._refreshGps();
+        
+        const userLat = this._userGpsLat;
+        const userLng = this._userGpsLng;
+        console.log(`Searching providers with GPS: lat=${userLat}, lng=${userLng}, location=${intent.location}`);
+
         try {
             const res = await this.callAPI('/search', 'POST', {
                 session_id: this.sessionId,
                 service_type: intent.service_type,
                 location: intent.location,
                 urgency: intent.urgency,
-                user_lat: this._userGpsLat,
-                user_lng: this._userGpsLng
+                user_lat: userLat,
+                user_lng: userLng
             });
 
             if (res.status === 'success') {
@@ -853,10 +916,15 @@ const app = {
 
         try {
             // 3. Call Backend
-            const res = await this.callAPI('/chat', 'POST', {
+            const chatData = {
                 session_id: this.sessionId,
                 text: messageText
-            });
+            };
+            if (this._userGpsLat && this._userGpsLng) {
+                chatData.user_lat = this._userGpsLat;
+                chatData.user_lng = this._userGpsLng;
+            }
+            const res = await this.callAPI('/chat', 'POST', chatData);
 
             this.sessionId = res.session_id;
             typingIndicator.style.display = 'none';
@@ -867,10 +935,16 @@ const app = {
             
             let content = '';
             if (res.intent) {
+                const locLabel = res.intent.location || 'Karachi';
+                const gpsLabel = (this._userGpsLat && this._userGpsLng) 
+                    ? `📍 GPS: ${this._userGpsLat.toFixed(4)}, ${this._userGpsLng.toFixed(4)}` 
+                    : '📍 GPS not available';
                 content += `
                     <div class="intent-card">
                         <p><strong>Intent:</strong> ${this.cleanText(res.intent.service_label)}</p>
+                        <p><strong>Location:</strong> ${this.escapeHtml(locLabel)}</p>
                         <p><strong>Urgency:</strong> <span class="badge ${res.intent.urgency === 'normal' ? '' : 'badge-error'}">${res.intent.urgency}</span></p>
+                        <p style="font-size:0.8em;color:#888;">${gpsLabel}</p>
                     </div>
                 `;
             }

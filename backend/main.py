@@ -124,6 +124,8 @@ munsif = MunsifAgent()
 class UserInput(BaseModel):
     session_id: Optional[str] = None
     text: str
+    user_lat: Optional[float] = None
+    user_lng: Optional[float] = None
 
 class SearchRequest(BaseModel):
     session_id: Optional[str] = None
@@ -235,19 +237,24 @@ async def chat(user_input: UserInput, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail="ADK not available. Please install it.")
 
     try:
-        result = await adk.run_zuban(session_id, user_input.text)
+        enriched_text = user_input.text
+        if user_input.user_lat and user_input.user_lng:
+            enriched_text = f"{user_input.text} (User GPS location: {user_input.user_lat}, {user_input.user_lng})"
+        
+        result = await adk.run_zuban(session_id, enriched_text)
         _push_trace(session_id, result.get("trace", []))
         
         intent = {}
-        # The intent is now in the tool_result of the 'submit_intent' tool call
         for step in result.get("trace", []):
             if step.get("tool_name") == "submit_intent" and "tool_result" in step:
                 intent = step.get("tool_result", {})
         
         if not intent:
+            intent = result.get("intent", {})
+        
+        if not intent:
             logger.error("Zuban did not return a valid intent.")
             munsif.add_workplan_step(session_id, "System", "Error: Zuban failed to understand the request.", error=True)
-            # Fallback to Meezan for clarification
             fallback_result = await adk.run_meezan(session_id, 0, "clarification", "", 0, "low", "", 0)
             _push_trace(session_id, fallback_result.get("trace", []))
             return {
@@ -257,6 +264,10 @@ async def chat(user_input: UserInput, db: Session = Depends(get_db)):
                 "session_id": session_id,
                 "session_state": munsif.get_session(session_id)
             }
+
+        if user_input.user_lat and user_input.user_lng:
+            intent["user_lat"] = user_input.user_lat
+            intent["user_lng"] = user_input.user_lng
 
         munsif.add_workplan_step(session_id, "System", f"Routing to Khoji for {intent.get('service_label', '')} search in {intent.get('location', '')}")
         
