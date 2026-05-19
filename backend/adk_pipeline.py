@@ -2,32 +2,37 @@
 Antigravity — Agent Pipeline
 Wraps the individual agent classes and provides async-compatible runners.
 """
-import asyncio
-import json
 import logging
-import os
-import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
 
-from dotenv import load_dotenv
-from sqlalchemy.orm import Session
-
-# Load .env from the backend directory
+# ── Load environment variables FIRST, before any local imports ────────────────
+# This ensures API keys are set before agents try to read them at import time.
 _backend_dir = Path(__file__).parent
-load_dotenv(_backend_dir / ".env")
+try:
+    from dotenv import load_dotenv
+    load_dotenv(_backend_dir / ".env")
+    load_dotenv()
+except ImportError:
+    pass  # dotenv not installed; rely on real environment variables
 
-from backend.database import SessionLocal
-from backend.models import Provider, Booking, Schedule
-from backend.zuban.zuban_agent import ZubanAgent, IntentResponse
-from backend.khoji.khoji_agent import KhojiAgent
-from backend.jadwal.jadwal_agent import JadwalAgent
-from backend.qeemat.qeemat_agent import QeematAgent
-from backend.meezan.meezan_agent import MeezanAgent
-from backend.insaf.insaf_agent import InsafAgent
+# ── Standard library / third-party ────────────────────────────────────────────
+try:
+    from sqlalchemy.orm import Session
+except ImportError:
+    Session = None  # type: ignore
 
-load_dotenv()
+# ── Local application imports ─────────────────────────────────────────────────
+# noqa: E402 — must come after load_dotenv so env vars are set before agents init
+from backend.database import SessionLocal  # noqa: E402
+from backend.models import Provider  # noqa: E402
+from backend.zuban.zuban_agent import ZubanAgent, IntentResponse  # noqa: E402
+from backend.khoji.khoji_agent import KhojiAgent  # noqa: E402
+from backend.jadwal.jadwal_agent import JadwalAgent  # noqa: E402
+from backend.qeemat.qeemat_agent import QeematAgent  # noqa: E402
+from backend.meezan.meezan_agent import MeezanAgent  # noqa: E402
+from backend.insaf.insaf_agent import InsafAgent  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
