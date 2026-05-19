@@ -1,14 +1,14 @@
 /**
- * Antigravity Frontend Router & Logic
+ * XIDMAT.AI Frontend Router & Logic
  * This mimics a Single Page Application (SPA) for Capacitor.js
  */
 
 const app = {
     // Current active screen
-    currentScreen: 'splash-screen',
+    currentScreen: 'auth-screen',
     
     // API Configuration
-    apiBase: 'http://127.0.0.1:8000',
+    apiBase: '',
     sessionId: null,
     authToken: null,
     currentUser: null,
@@ -49,7 +49,7 @@ const app = {
 
     // Initialize the app
     init() {
-        console.log("Antigravity App Initialized");
+        console.log("XIDMAT.AI App Initialized");
         
         // Check for stored auth token
         const storedToken = localStorage.getItem('authToken');
@@ -60,7 +60,9 @@ const app = {
             this.updateUserGreeting();
         }
         
-        // Auto-hide splash screen after 2.5 seconds
+        // Show splash screen first, then transition after a delay
+        this.navigate('splash-screen');
+        
         setTimeout(() => {
             if (this.authToken) {
                 this.navigate('home-screen');
@@ -70,7 +72,7 @@ const app = {
             } else {
                 this.navigate('auth-screen');
             }
-        }, 2500);
+        }, 2200);
 
         // Bind Enter key on chat input
         const chatInput = document.getElementById('chat-input');
@@ -87,34 +89,95 @@ const app = {
     toggleAuthForm(form) {
         const loginForm = document.getElementById('login-form');
         const registerForm = document.getElementById('register-form');
+        const tabLogin = document.getElementById('tab-login');
+        const tabRegister = document.getElementById('tab-register');
         
         if (form === 'register') {
             loginForm.style.display = 'none';
             registerForm.style.display = 'block';
+            if (tabRegister) tabRegister.classList.add('active');
+            if (tabLogin) tabLogin.classList.remove('active');
         } else {
             loginForm.style.display = 'block';
             registerForm.style.display = 'none';
+            if (tabLogin) tabLogin.classList.add('active');
+            if (tabRegister) tabRegister.classList.remove('active');
         }
     },
 
-    // Login with email and password
+    // Toggle password visibility
+    togglePasswordVisibility(passwordId, toggleIcon) {
+        const passwordInput = document.getElementById(passwordId);
+        if (passwordInput) {
+            if (passwordInput.type === 'password') {
+                passwordInput.type = 'text';
+                toggleIcon.classList.remove('ph-eye-slash');
+                toggleIcon.classList.add('ph-eye');
+            } else {
+                passwordInput.type = 'password';
+                toggleIcon.classList.remove('ph-eye');
+                toggleIcon.classList.add('ph-eye-slash');
+            }
+        }
+    },
+
+    // Display inline error on login form
+    showLoginError(message) {
+        const errorEl = document.getElementById('login-error');
+        if (errorEl) {
+            errorEl.innerHTML = `<i class="ph-fill ph-warning-circle"></i> ${message}`;
+            errorEl.style.display = 'flex';
+            errorEl.style.animation = 'none';
+            errorEl.offsetHeight; // trigger reflow
+            errorEl.style.animation = null;
+        }
+    },
+
+    // Display inline error on register form
+    showRegisterError(message) {
+        const errorEl = document.getElementById('register-error');
+        if (errorEl) {
+            errorEl.innerHTML = `<i class="ph-fill ph-warning-circle"></i> ${message}`;
+            errorEl.style.display = 'flex';
+            errorEl.style.animation = 'none';
+            errorEl.offsetHeight; // trigger reflow
+            errorEl.style.animation = null;
+        }
+    },
+
+    // Login with phone and password
     async login() {
-        const email = document.getElementById('login-email').value;
+        const phone = document.getElementById('login-phone').value.trim();
         const password = document.getElementById('login-password').value;
         const loginBtn = document.querySelector('#login-form .btn-primary');
 
-        if (!email || !password) {
-            alert("Please enter email and password.");
+        // Clear previous error
+        const errorEl = document.getElementById('login-error');
+        if (errorEl) errorEl.style.display = 'none';
+
+        if (!phone) {
+            this.showLoginError("Phone number is required.");
+            return;
+        }
+
+        const phoneRegex = /^03\d{9}$/;
+        if (!phoneRegex.test(phone)) {
+            this.showLoginError("Please enter a valid 11-digit phone number starting with 03 (e.g. 03001234567).");
+            return;
+        }
+
+        if (!password) {
+            this.showLoginError("Password is required.");
             return;
         }
 
         // Disable button and show loading
         loginBtn.disabled = true;
-        loginBtn.textContent = 'Logging in...';
+        loginBtn.innerHTML = '<i class="ph ph-spinner"></i> Logging in...';
 
         try {
             const result = await this.callAPI('/auth/login', 'POST', {
-                phone: email,
+                phone: phone,
                 password: password
             });
             
@@ -131,34 +194,58 @@ const app = {
             this.loadAnalytics();
             this.loadNotifications();
         } catch (error) {
-            alert("Login failed: " + error.message);
+            this.showLoginError(error.message || "Invalid phone number or password.");
         } finally {
             loginBtn.disabled = false;
-            loginBtn.textContent = 'Login';
+            loginBtn.innerHTML = '<i class="ph ph-sign-in"></i> Sign In';
         }
     },
 
-    // Register with email and password
+    // Register with phone and password
     async register() {
-        const name = document.getElementById('register-name').value;
-        const email = document.getElementById('register-email').value;
+        const name = document.getElementById('register-name').value.trim();
+        const phone = document.getElementById('register-phone').value.trim();
         const password = document.getElementById('register-password').value;
         const registerBtn = document.querySelector('#register-form .btn-primary');
 
-        if (!name || !email || !password) {
-            alert("Please fill all fields.");
+        // Clear previous error
+        const errorEl = document.getElementById('register-error');
+        if (errorEl) errorEl.style.display = 'none';
+
+        if (!name) {
+            this.showRegisterError("Full name is required.");
+            return;
+        }
+
+        if (!phone) {
+            this.showRegisterError("Phone number is required.");
+            return;
+        }
+
+        const phoneRegex = /^03\d{9}$/;
+        if (!phoneRegex.test(phone)) {
+            this.showRegisterError("Please enter a valid 11-digit phone number starting with 03 (e.g. 03001234567).");
+            return;
+        }
+
+        if (!password) {
+            this.showRegisterError("Password is required.");
+            return;
+        }
+
+        if (password.length < 6) {
+            this.showRegisterError("Password must be at least 6 characters.");
             return;
         }
 
         // Disable button and show loading
         registerBtn.disabled = true;
-        registerBtn.textContent = 'Creating Account...';
+        registerBtn.innerHTML = '<i class="ph ph-spinner"></i> Creating Account...';
 
         try {
             const result = await this.callAPI('/auth/register', 'POST', {
                 name: name,
-                phone: email,
-                email: email,
+                phone: phone,
                 password: password,
                 role: 'user'
             });
@@ -176,10 +263,10 @@ const app = {
             this.loadAnalytics();
             this.loadNotifications();
         } catch (error) {
-            alert("Registration failed: " + error.message);
+            this.showRegisterError(error.message || "Registration failed. Account might already exist.");
         } finally {
             registerBtn.disabled = false;
-            registerBtn.textContent = 'Create Account';
+            registerBtn.innerHTML = '<i class="ph ph-user-plus"></i> Create Account';
         }
     },
 
@@ -196,7 +283,11 @@ const app = {
         localStorage.removeItem('currentUser');
         this.authToken = null;
         this.currentUser = null;
-        
+
+        // Hide sidebar user info
+        const sidebarUser = document.getElementById('sidebar-user-info');
+        if (sidebarUser) sidebarUser.style.display = 'none';
+
         this.navigate('auth-screen');
     },
 
@@ -205,6 +296,16 @@ const app = {
         const greetingEl = document.getElementById('user-greeting');
         if (greetingEl && this.currentUser) {
             greetingEl.textContent = `Hello, ${this.currentUser.name || 'User'}`;
+        }
+
+        // Populate sidebar user details
+        const sidebarUser = document.getElementById('sidebar-user-info');
+        const sidebarName = document.getElementById('sidebar-user-name');
+        const sidebarPhone = document.getElementById('sidebar-user-phone');
+        if (sidebarUser && this.currentUser) {
+            sidebarUser.style.display = 'flex';
+            if (sidebarName) sidebarName.textContent = this.currentUser.name || 'User';
+            if (sidebarPhone) sidebarPhone.textContent = this.currentUser.phone || '03001234567';
         }
     },
 
@@ -310,7 +411,7 @@ const app = {
                         </div>
                         <div class="booking-item-info">
                             <strong>${b.service_type ? b.service_type.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase()) : 'Service'}</strong>
-                            <p>${b.confirmation_code || ''} • <span class="status-badge status-${(b.status||'').toLowerCase()}">${b.status || 'N/A'}</span></p>
+                            <p>${b.confirmation_code || ''} | ${this.cleanText(b.confirmed_slot || '')} • <span class="status-badge status-${(b.status||'').toLowerCase()}">${b.status || 'N/A'}</span></p>
                         </div>
                         <div class="booking-item-price">PKR ${b.price ? Math.round(b.price).toLocaleString() : 'N/A'}</div>
                     </div>
@@ -354,7 +455,7 @@ const app = {
                     stepEl.innerHTML = `
                         <div class="trace-icon">${icon}</div>
                         <div class="trace-agent">[${step.agent}]</div>
-                        <div class="trace-msg">${step.message}</div>
+                        <div class="trace-msg">${this.cleanText(step.message)}</div>
                         <div class="trace-time">#${step.step_number}</div>
                     `;
                     traceLogs.appendChild(stepEl);
@@ -467,27 +568,35 @@ const app = {
             }
         }
 
-        // Handle Bottom Nav Bar visibility
+        // Handle Bottom Nav Bar & Desktop Sidebar visibility
         const bottomNav = document.getElementById('bottom-nav');
-        if (targetScreen.classList.contains('has-bottom-nav')) {
-            bottomNav.style.display = 'flex';
-        } else {
-            bottomNav.style.display = 'none';
-        }
+        const desktopSidebar = document.getElementById('desktop-sidebar');
+        const hasNav = targetScreen && targetScreen.classList.contains('has-bottom-nav');
+        const showSidebar = targetScreen && screenId !== 'splash-screen' && screenId !== 'auth-screen';
+        const appContainer = document.querySelector('.app-container');
 
-        // Handle Nav Bar Active States
-        if (navElement) {
-            document.querySelectorAll('.nav-item').forEach(item => {
-                item.classList.remove('active');
-            });
-            navElement.classList.add('active');
-        } else {
-            // Auto update nav if navigating programmatically (e.g. from splash to home)
-            if(screenId === 'home-screen') {
-                document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
-                document.querySelectorAll('.nav-item')[0].classList.add('active');
+        if (bottomNav) {
+            bottomNav.style.display = hasNav ? 'flex' : 'none';
+        }
+        if (desktopSidebar) {
+            if (showSidebar) {
+                desktopSidebar.classList.add('visible');
+                if (appContainer) appContainer.classList.add('sidebar-open');
+            } else {
+                desktopSidebar.classList.remove('visible');
+                if (appContainer) appContainer.classList.remove('sidebar-open');
             }
         }
+
+        // Handle Nav Bar & Sidebar Active States
+        document.querySelectorAll('.nav-item, .sidebar-nav-item').forEach(item => {
+            const onclickStr = item.getAttribute('onclick') || '';
+            if (onclickStr.includes(`'${screenId}'`) || onclickStr.includes(`"${screenId}"`)) {
+                item.classList.add('active');
+            } else {
+                item.classList.remove('active');
+            }
+        });
     },
 
     // Search for providers via Khoji
@@ -507,7 +616,7 @@ const app = {
                 const agentBubble = document.createElement('div');
                 agentBubble.className = 'chat-bubble agent-bubble fade-up-anim';
                 
-                let content = `<p>${res.message}</p><div class="provider-list mt-2">`;
+                let content = `<p>${this.cleanText(res.message)}</p><div class="provider-list mt-2">`;
                 providers.forEach((p, index) => {
                     const verifiedBadge = p.is_verified ? '<i class="ph-fill ph-seal-check text-primary" title="Verified Provider"></i>' : '';
                     content += `
@@ -516,7 +625,7 @@ const app = {
                                 <img src="https://ui-avatars.com/api/?name=${encodeURIComponent(p.name)}&background=1A56DB&color=fff" class="avatar-sm">
                                 <div class="provider-info">
                                     <strong>${this.escapeHtml(p.name)} ${verifiedBadge}</strong>
-                                    <p>⭐ ${p.rating} • ${p.distance_km}km • ${this.escapeHtml(p.rationale || 'Recommended')}</p>
+                                    <p>⭐ ${p.rating} • ${p.distance_km}km • ${this.escapeHtml(this.cleanText(p.rationale || 'Recommended'))}</p>
                                 </div>
                                 <div class="price-tag">PKR ${p.base_price}</div>
                             </div>
@@ -538,7 +647,7 @@ const app = {
                 
                 chatContainer.scrollTop = chatContainer.scrollHeight;
             } else {
-                this.addAgentResponse(res.message);
+                this.addAgentResponse(this.cleanText(res.message));
             }
         } catch (error) {
             this.addAgentResponse("Khoji se rabta nahi ho saka. (Search failed)");
@@ -550,6 +659,11 @@ const app = {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    },
+
+    cleanText(text) {
+        if (typeof text !== 'string') return text;
+        return text.replace(/—/g, ' | ');
     },
 
     async selectProvider(provider, intent) {
@@ -603,7 +717,7 @@ const app = {
                 location: this.currentIntent.location,
                 distance_km: this.selectedProvider.distance_km,
                 urgency: this.currentIntent.urgency,
-                confirmed_slot: (this.currentIntent.time_raw || 'Today') + " — " + (this.currentIntent.time_normalized || 'ASAP')
+                confirmed_slot: (this.currentIntent.time_raw || 'Today') + " | " + (this.currentIntent.time_normalized || 'ASAP')
             });
 
             // Show Confirmation Screen
@@ -619,8 +733,8 @@ const app = {
 
             // Update meta
             const metaPs = document.querySelectorAll('#confirmation-screen .booking-meta p');
-            if (metaPs[0]) metaPs[0].innerHTML = `<i class="ph ph-calendar"></i> ${res.confirmed_slot}`;
-            if (metaPs[1]) metaPs[1].innerHTML = `<i class="ph ph-map-pin"></i> ${res.location}`;
+            if (metaPs[0]) metaPs[0].innerHTML = `<i class="ph ph-calendar"></i> ${this.cleanText(res.confirmed_slot)}`;
+            if (metaPs[1]) metaPs[1].innerHTML = `<i class="ph ph-map-pin"></i> ${this.cleanText(res.location)}`;
 
             // Update rating in confirmation
             const ratingEl = document.querySelector('#confirmation-screen .provider-details p');
@@ -632,7 +746,7 @@ const app = {
 
             if (res.price_breakdown) {
                 // Parse newline-separated trace log
-                const lines = res.price_breakdown.split('\n');
+                const lines = this.cleanText(res.price_breakdown).split('\n');
                 const labelMap = {
                     'Base rate': 'Base Rate',
                     'Urgency': 'Urgency Premium',
@@ -736,12 +850,12 @@ const app = {
             if (res.intent) {
                 content += `
                     <div class="intent-card">
-                        <p><strong>Intent:</strong> ${res.intent.service_label}</p>
+                        <p><strong>Intent:</strong> ${this.cleanText(res.intent.service_label)}</p>
                         <p><strong>Urgency:</strong> <span class="badge ${res.intent.urgency === 'normal' ? '' : 'badge-error'}">${res.intent.urgency}</span></p>
                     </div>
                 `;
             }
-            content += res.message;
+            content += this.cleanText(res.message);
             agentBubble.innerHTML = content;
             
             chatContainer.insertBefore(agentBubble, typingIndicator);
@@ -795,7 +909,7 @@ const app = {
         const steps = workplan.map(step => ({
             agent: step.agent,
             icon: agentMeta[step.agent]?.icon || '🤖',
-            msg: step.action + (step.error ? `: <span style="color:red">${step.error}</span>` : ''),
+            msg: this.cleanText(step.action) + (step.error ? `: <span style="color:red">${step.error}</span>` : ''),
             time: '300ms',
             type: step.error ? 'warning' : 'success'
         }));
@@ -824,7 +938,7 @@ const app = {
             stepEl.innerHTML = `
                 <div class="trace-icon">${step.icon}</div>
                 <div class="trace-agent">[${step.agent}]</div>
-                <div class="trace-msg">${step.msg}</div>
+                <div class="trace-msg">${this.cleanText(step.msg)}</div>
                 <div class="trace-time">${step.time}</div>
             `;
             traceLogs.appendChild(stepEl);
@@ -1186,7 +1300,7 @@ const app = {
             const disputeWorkplan = [
                 { agent: 'Insaf', action: `Dispute received: ${type.replace(/_/g,' ')}` },
                 { agent: 'Insaf', action: `Classification: ${type}` },
-                { agent: 'Insaf', action: `Resolution: ${res.resolution || res.message || 'Processing'}` },
+                { agent: 'Insaf', action: `Resolution: ${this.cleanText(res.resolution || res.message || 'Processing')}` },
                 { agent: 'Insaf', action: `Status: ${res.status || 'resolved'}` }
             ];
             this.runTrace(disputeWorkplan, () => this.navigate('home-screen'));
@@ -1200,7 +1314,7 @@ const app = {
         const typingIndicator = document.getElementById('typing-indicator');
         const agentBubble = document.createElement('div');
         agentBubble.className = 'chat-bubble agent-bubble fade-up-anim';
-        agentBubble.textContent = text;
+        agentBubble.textContent = this.cleanText(text);
         chatContainer.insertBefore(agentBubble, typingIndicator);
         chatContainer.scrollTop = chatContainer.scrollHeight;
     },
@@ -1227,7 +1341,7 @@ const app = {
                         </div>
                         <div class="booking-item-info">
                             <strong>${b.service_type ? b.service_type.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase()) : 'Service'}</strong>
-                            <p>${b.confirmation_code || ''} • <span class="status-badge status-${(b.status||'').toLowerCase()}">${b.status || 'N/A'}</span></p>
+                            <p>${b.confirmation_code || ''} | ${this.cleanText(b.confirmed_slot || '')} • <span class="status-badge status-${(b.status||'').toLowerCase()}">${b.status || 'N/A'}</span></p>
                         </div>
                         <div class="booking-item-price">PKR ${b.price ? Math.round(b.price).toLocaleString() : 'N/A'}</div>
                     </div>

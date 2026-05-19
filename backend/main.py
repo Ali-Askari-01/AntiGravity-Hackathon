@@ -3,20 +3,26 @@ Antigravity FastAPI — All agent calls go through the Google ADK pipeline.
 """
 from fastapi import FastAPI, HTTPException, Depends, WebSocket, WebSocketDisconnect, Header
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional
+from collections import defaultdict
 import contextlib
 import datetime
 import logging
 import uuid
 import hashlib
 import secrets
+import os
+import time
 
 from backend.database import engine, get_db, SessionLocal
 from backend import models
 
+from sqlalchemy.orm import Session
+
 from backend.munsif.munsif_agent import MunsifAgent        # session/workplan manager
-from backend.meezan.meezan_agent import MeezanAgent        # fallback for feedback/dispute
 
 logger = logging.getLogger(__name__)
 
@@ -80,10 +86,6 @@ def get_current_user(authorization: str = Header(None), db: SessionLocal = Depen
         return None
     return user_data
 
-# ── Simple Rate Limiting Middleware (Hackathon Demo) ───────────────────────────
-from collections import defaultdict
-import time
-
 rate_limit_store = defaultdict(list)
 RATE_LIMIT = 100  # requests per minute
 RATE_LIMIT_WINDOW = 60  # seconds
@@ -102,7 +104,6 @@ async def rate_limit_middleware(request, call_next):
     
     # Check rate limit
     if len(rate_limit_store[client_ip]) >= RATE_LIMIT:
-        from fastapi.responses import JSONResponse
         return JSONResponse(
             status_code=429,
             content={"detail": "Too many requests. Please try again later."}
@@ -184,9 +185,8 @@ class TokenResponse(BaseModel):
     user: dict
 
 
-@app.get("/")
-def read_root():
-    return {"status": "success", "message": "Antigravity Backend is running!"}
+# ── Frontend dir (mounted at bottom of file after all routes) ─────────────────
+frontend_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend")
 
 
 # ── Helper: push ADK trace into our SQLite workplan ────────────────────────────
@@ -429,11 +429,9 @@ async def create_booking(req: BookingRequest, current_user: dict = Depends(get_c
         _push_trace(session_id, qeemat_result.get("trace", []))
         
         price = 0
-        price_breakdown = {}
         for step in qeemat_result.get("trace", []):
             if step.get("tool_name") == "calculate_price" and "tool_result" in step:
                 price = step["tool_result"].get("final_price", 0)
-                price_breakdown = step["tool_result"].get("breakdown", {})
                 break
         
         if price == 0:
@@ -891,3 +889,8 @@ def verify_provider(provider_id: int, status: str = "verified", db=Depends(get_d
 def health():
     return {"status": "ok", "adk_available": _adk_available,
             "timestamp": datetime.datetime.utcnow().isoformat()}
+
+# ── Mount Frontend Static Files ─────────────────────────────────────────────────
+# Must be mounted AFTER all other routes so it doesn't override API endpoints
+if os.path.exists(frontend_dir):
+    app.mount("/", StaticFiles(directory=frontend_dir, html=True), name="frontend")

@@ -2,87 +2,146 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Antigravity Services</title>
-    
-    <!-- Google Fonts: Outfit -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="description" content="XIDMAT.AI - AI-powered home services. Book plumbers, electricians, AC technicians & more in minutes.">
+    <title>XIDMAT.AI - Smart Home Services</title>
+
+    <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@400;600&display=swap" rel="stylesheet">
-    
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet">
+
     <!-- Phosphor Icons -->
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
-    
+
     <!-- Google Maps API -->
     <script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAJvsEDJ_444qUVosppTzCwqdTvGvDPD5A&libraries=places"></script>
-    
+
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+    <div class="app-container">
+
+    <!-- ==================== DESKTOP SIDEBAR ==================== -->
+    <aside class="desktop-sidebar" id="desktop-sidebar">
+        <div class="sidebar-brand">
+            <div class="logo-icon-wrap">
+                <i class="ph-fill ph-robot"></i>
+            </div>
+            <h2>XIDMAT<span class="ai-dot">.AI</span></h2>
+        </div>
+        <nav class="sidebar-nav">
+            <a href="#" class="sidebar-nav-item active" onclick="app.navigate('home-screen', this)">
+                <i class="ph ph-house"></i>
+                <span>Home</span>
+            </a>
+            <a href="#" class="sidebar-nav-item" onclick="app.navigate('chat-screen', this)">
+                <i class="ph ph-chat-teardrop-text"></i>
+                <span>Munsif AI</span>
+            </a>
+            <a href="#" class="sidebar-nav-item" onclick="app.navigate('bookings-screen', this)">
+                <i class="ph ph-calendar-check"></i>
+                <span>Bookings</span>
+            </a>
+            <a href="#" class="sidebar-nav-item" onclick="app.navigate('profile-screen', this)">
+                <i class="ph ph-user"></i>
+                <span>Profile</span>
+            </a>
+        </nav>
+        <div class="sidebar-footer">
+            <div class="sidebar-user-info" id="sidebar-user-info" style="display: none;">
+                <div class="user-avatar-placeholder">
+                    <i class="ph ph-user-circle"></i>
+                </div>
+                <div class="user-details">
+                    <span class="user-name-span" id="sidebar-user-name">User</span>
+                    <span class="user-phone-span" id="sidebar-user-phone">03001234567</span>
+                </div>
+            </div>
+            <button class="btn-logout" onclick="app.logout()">
+                <i class="ph ph-sign-out"></i>
+                <span>Sign Out</span>
+            </button>
+        </div>
+    </aside>
 
     <!-- ==================== SPLASH SCREEN ==================== -->
     <section id="splash-screen" class="view active">
+        <div class="splash-bg"></div>
         <div class="splash-content">
-            <div class="logo-container pulse-anim">
-                <i class="ph-fill ph-rocket-launch logo-icon"></i>
-                <h1 class="logo-text">Antigravity</h1>
+            <div class="logo-container">
+                <div class="logo-icon-wrap pulse-anim">
+                    <i class="ph-fill ph-robot"></i>
+                </div>
+                <h1 class="splash-title">XIDMAT<span class="ai-dot">.AI</span></h1>
+                <p class="splash-subtitle">Smart Home Services, Powered by AI</p>
             </div>
         </div>
-        <div class="splash-bottom-sheet slide-up-anim">
-            <h2>Your Local Experts.</h2>
-            <p>Book trusted professionals for any job, instantly.</p>
-            <button class="btn-primary ripple" onclick="app.navigate('auth-screen')">Get Started</button>
+        <div class="splash-footer">
+            <div class="splash-loader">
+                <div class="loader-bar"></div>
+            </div>
         </div>
     </section>
 
     <!-- ==================== AUTH SCREEN ==================== -->
     <section id="auth-screen" class="view">
-        <div class="auth-container">
-            <div class="auth-header">
-                <h2>Welcome to Antigravity</h2>
-                <p>Login or create an account to continue.</p>
+        <div class="auth-layout">
+            <!-- Left / Top Branding Panel -->
+            <div class="auth-brand-panel">
+                <div class="brand-logo-sm">
+                    <i class="ph-fill ph-robot"></i>
+                </div>
+                <h1 class="brand-name">XIDMAT<span class="ai-dot">.AI</span></h1>
+                <p class="brand-tagline">Your AI-powered home service companion</p>
             </div>
-            
-            <!-- Login Form -->
-            <div class="auth-form" id="login-form">
-                <div class="input-group">
-                    <input type="email" id="login-email" required>
-                    <label for="login-email">Email Address</label>
-                    <div class="underline"></div>
+
+            <!-- Right / Bottom Auth Form Panel -->
+            <div class="auth-form-panel">
+                <div class="auth-tabs">
+                    <button class="auth-tab active" id="tab-login" onclick="app.toggleAuthForm('login')">Sign In</button>
+                    <button class="auth-tab" id="tab-register" onclick="app.toggleAuthForm('register')">Create Account</button>
                 </div>
-                
-                <div class="input-group">
-                    <input type="password" id="login-password" required>
-                    <label for="login-password">Password</label>
-                    <div class="underline"></div>
+
+                <!-- Login Form -->
+                <div class="auth-form" id="login-form">
+                    <div class="input-group">
+                        <i class="ph ph-phone input-icon"></i>
+                        <input type="tel" id="login-phone" placeholder="Phone number (e.g. 03001234567)" maxlength="11" oninput="this.value = this.value.replace(/[^0-9]/g, '')" required>
+                    </div>
+                    <div class="input-group">
+                        <i class="ph ph-lock input-icon"></i>
+                        <input type="password" id="login-password" placeholder="Password" required>
+                        <i class="ph ph-eye-slash password-toggle-icon" onclick="app.togglePasswordVisibility('login-password', this)"></i>
+                    </div>
+                    <div class="auth-error-message" id="login-error" style="display: none;"></div>
+                    <button class="btn-primary ripple" onclick="app.login()">
+                        <i class="ph ph-sign-in"></i> Sign In
+                    </button>
+                    <p class="auth-switch-text">Don't have an account? <button class="link-btn" onclick="app.toggleAuthForm('register')">Sign up free</button></p>
                 </div>
-                
-                <button class="btn-primary ripple mt-4" onclick="app.login()">Login</button>
-                <button class="btn-text mt-2" onclick="app.toggleAuthForm('register')">Create Account</button>
-            </div>
-            
-            <!-- Register Form -->
-            <div class="auth-form" id="register-form" style="display: none;">
-                <div class="input-group">
-                    <input type="text" id="register-name" required>
-                    <label for="register-name">Full Name</label>
-                    <div class="underline"></div>
+
+                <!-- Register Form -->
+                <div class="auth-form" id="register-form" style="display: none;">
+                    <div class="input-group">
+                        <i class="ph ph-user input-icon"></i>
+                        <input type="text" id="register-name" placeholder="Full name" required>
+                    </div>
+                    <div class="input-group">
+                        <i class="ph ph-phone input-icon"></i>
+                        <input type="tel" id="register-phone" placeholder="Phone number (e.g. 03001234567)" maxlength="11" oninput="this.value = this.value.replace(/[^0-9]/g, '')" required>
+                    </div>
+                    <div class="input-group">
+                        <i class="ph ph-lock input-icon"></i>
+                        <input type="password" id="register-password" placeholder="Create password" required>
+                        <i class="ph ph-eye-slash password-toggle-icon" onclick="app.togglePasswordVisibility('register-password', this)"></i>
+                    </div>
+                    <div class="auth-error-message" id="register-error" style="display: none;"></div>
+                    <button class="btn-primary ripple" onclick="app.register()">
+                        <i class="ph ph-user-plus"></i> Create Account
+                    </button>
+                    <p class="auth-switch-text">Already have an account? <button class="link-btn" onclick="app.toggleAuthForm('login')">Sign in</button></p>
                 </div>
-                
-                <div class="input-group">
-                    <input type="email" id="register-email" required>
-                    <label for="register-email">Email Address</label>
-                    <div class="underline"></div>
-                </div>
-                
-                <div class="input-group">
-                    <input type="password" id="register-password" required>
-                    <label for="register-password">Password</label>
-                    <div class="underline"></div>
-                </div>
-                
-                <button class="btn-primary ripple mt-4" onclick="app.register()">Create Account</button>
-                <button class="btn-text mt-2" onclick="app.toggleAuthForm('login')">Already have an account? Login</button>
             </div>
         </div>
     </section>
@@ -90,12 +149,15 @@
     <!-- ==================== HOME DASHBOARD ==================== -->
     <section id="home-screen" class="view has-bottom-nav">
         <header class="app-header">
-            <div class="header-left">
-                <h1 class="app-title">Antigravity</h1>
-                <span id="user-greeting" class="user-greeting">Hello, User</span>
+            <div class="header-brand">
+                <div class="header-logo"><i class="ph-fill ph-robot"></i></div>
+                <div>
+                    <h1 class="app-title">XIDMAT<span class="ai-dot">.AI</span></h1>
+                    <span id="user-greeting" class="user-greeting">Hello, User 👋</span>
+                </div>
             </div>
-            <div class="header-right">
-                <button class="icon-btn" onclick="app.showNotifications()" id="notif-btn">
+            <div class="header-actions">
+                <button class="icon-btn notif-btn" onclick="app.showNotifications()" id="notif-btn">
                     <i class="ph ph-bell"></i>
                     <span class="notif-badge" id="notif-badge" style="display: none;">0</span>
                 </button>
@@ -104,151 +166,191 @@
         </header>
 
         <main class="home-container">
-            <div class="request-box glass-card">
-                <div class="input-header">
-                    <span>What do you need help with?</span>
-                    <span id="lang-badge" class="badge-lang">English</span>
+            <!-- Hero Request Box -->
+            <div class="hero-section">
+                <div class="hero-text">
+                    <h2>What do you need <span class="gradient-text">help with?</span></h2>
+                    <p>Describe your issue in Urdu or English. Our AI will handle the rest.</p>
                 </div>
-                <textarea id="home-request-input" placeholder="e.g. Mere AC se pani tapak raha hai..." oninput="app.onInput(this)"></textarea>
-            </div>
-
-            <div class="chips-container">
-                <div class="chip" onclick="app.fillInput('Plumber for leaky pipe')">🔧 Leaky Pipe</div>
-                <div class="chip" onclick="app.fillInput('AC not cooling enough')">❄️ AC Service</div>
-                <div class="chip" onclick="app.fillInput('Clean my 3-bedroom house')">🧹 Deep Cleaning</div>
-                <div class="chip" onclick="app.fillInput('Fix short circuit in lounge')">⚡ Electrical</div>
-            </div>
-
-            <div class="promotion-carousel mt-4">
-                <div class="promo-card bg-primary">
-                    <div class="promo-content">
-                        <h3>Flat 20% Off</h3>
-                        <p>On your first AC service this season.</p>
+                <div class="request-box">
+                    <div class="request-box-header">
+                        <i class="ph ph-chat-circle-dots"></i>
+                        <span id="lang-badge" class="badge-lang">🌐 English / اردو</span>
                     </div>
-                    <i class="ph-fill ph-snowflake promo-icon"></i>
+                    <textarea id="home-request-input" placeholder="e.g. Mere AC se pani tapak raha hai... or My AC is dripping water..." oninput="app.onInput(this)"></textarea>
+                    <button class="btn-find-service ripple" onclick="app.processRequest()">
+                        <i class="ph-fill ph-magnifying-glass"></i>
+                        Find Service
+                        <i class="ph ph-arrow-right"></i>
+                    </button>
                 </div>
             </div>
-            
+
+            <!-- Quick Chips -->
+            <div class="section-label">Popular Services</div>
+            <div class="chips-container">
+                <div class="chip" onclick="app.fillInput('Plumber for leaky pipe')"><span>🔧</span> Leaky Pipe</div>
+                <div class="chip" onclick="app.fillInput('AC not cooling enough')"><span>❄️</span> AC Service</div>
+                <div class="chip" onclick="app.fillInput('Clean my 3-bedroom house')"><span>🧹</span> Deep Cleaning</div>
+                <div class="chip" onclick="app.fillInput('Fix short circuit in lounge')"><span>⚡</span> Electrical</div>
+                <div class="chip" onclick="app.fillInput('Gas geyser repair')"><span>🔥</span> Geyser</div>
+                <div class="chip" onclick="app.fillInput('Painting service for 2 rooms')"><span>🎨</span> Painting</div>
+            </div>
+
+            <!-- Promo Banner -->
+            <div class="promo-card">
+                <div class="promo-content">
+                    <span class="promo-badge">🎉 Limited Offer</span>
+                    <h3>Flat 20% Off</h3>
+                    <p>On your first AC service this season</p>
+                    <button class="promo-btn" onclick="app.fillInput('AC not cooling enough')">Book Now →</button>
+                </div>
+                <div class="promo-visual"><i class="ph-fill ph-snowflake"></i></div>
+            </div>
+
             <!-- Analytics Summary -->
-            <div class="analytics-summary mt-4" id="analytics-summary" style="display: none;">
-                <h3 class="section-title">Quick Stats</h3>
+            <div class="analytics-summary" id="analytics-summary" style="display: none;">
+                <div class="section-label">Your Activity</div>
                 <div class="stats-grid">
                     <div class="stat-card">
-                        <i class="ph-fill ph-calendar-check"></i>
-                        <span id="stat-bookings">0</span>
+                        <div class="stat-icon bookings-icon"><i class="ph-fill ph-calendar-check"></i></div>
+                        <span id="stat-bookings" class="stat-value">0</span>
                         <p>Total Bookings</p>
                     </div>
                     <div class="stat-card">
-                        <i class="ph-fill ph-check-circle"></i>
-                        <span id="stat-completed">0</span>
+                        <div class="stat-icon completed-icon"><i class="ph-fill ph-check-circle"></i></div>
+                        <span id="stat-completed" class="stat-value">0</span>
                         <p>Completed</p>
                     </div>
                     <div class="stat-card">
-                        <i class="ph-fill ph-star"></i>
-                        <span id="stat-rating">0</span>
+                        <div class="stat-icon rating-icon"><i class="ph-fill ph-star"></i></div>
+                        <span id="stat-rating" class="stat-value">0</span>
                         <p>Avg Rating</p>
                     </div>
                 </div>
             </div>
-            
-            <h3 class="section-title mt-4">Your Recent Services</h3>
-            <div class="booking-list">
-                <!-- Recent items -->
+
+            <!-- Recent Services -->
+            <div class="section-label mt-4">Recent Services</div>
+            <div class="booking-list" id="home-booking-list">
+                <div class="empty-state">
+                    <i class="ph ph-calendar-blank"></i>
+                    <p>No recent services yet.<br>Book your first service above!</p>
+                </div>
             </div>
         </main>
-        
-        <div class="pinned-cta">
-            <button class="btn-primary ripple h-56" onclick="app.processRequest()">Find Service</button>
-        </div>
     </section>
 
     <!-- ==================== CHAT INTERFACE ==================== -->
     <section id="chat-screen" class="view has-bottom-nav">
-        <header class="chat-header glass-card">
+        <header class="chat-header">
+            <button class="icon-btn back-btn" onclick="app.navigate('home-screen')">
+                <i class="ph ph-arrow-left"></i>
+            </button>
             <div class="agent-profile">
-                <div class="agent-avatar"><i class="ph-fill ph-robot"></i></div>
+                <div class="agent-avatar">
+                    <i class="ph-fill ph-robot"></i>
+                    <span class="online-dot"></span>
+                </div>
                 <div>
                     <h3>Munsif</h3>
-                    <p class="status">AI Assistant • Online</p>
+                    <p class="status">XIDMAT.AI Assistant • Online</p>
                 </div>
             </div>
-            <button class="icon-btn"><i class="ph ph-dots-three-vertical"></i></button>
+            <button class="icon-btn" onclick="app.navigate('trace-screen')">
+                <i class="ph ph-brain"></i>
+            </button>
         </header>
 
         <main class="chat-body" id="chat-container">
-            <!-- Chat bubbles will be injected here dynamically -->
             <div class="typing-indicator fade-up-anim" id="typing-indicator" style="display: none;">
                 <span></span><span></span><span></span>
             </div>
         </main>
 
         <footer class="chat-footer glass-card">
-            <button class="icon-btn"><i class="ph ph-paperclip"></i></button>
+            <button class="icon-btn attach-btn"><i class="ph ph-paperclip"></i></button>
             <div class="chat-input-wrapper">
-                <input type="text" placeholder="Type a message..." id="chat-input">
+                <input type="text" placeholder="Ask Munsif in Urdu or English..." id="chat-input" onkeydown="if(event.key==='Enter') app.sendMessage()">
             </div>
-            <button class="send-btn ripple" onclick="app.sendMessage()"><i class="ph-fill ph-paper-plane-right"></i></button>
+            <button class="send-btn ripple" onclick="app.sendMessage()">
+                <i class="ph-fill ph-paper-plane-right"></i>
+            </button>
         </footer>
     </section>
 
     <!-- ==================== BOOKING CONFIRMATION SCREEN ==================== -->
     <section id="confirmation-screen" class="view">
-        <header class="confirmation-header">
-            <button class="icon-btn" onclick="app.navigate('home-screen')"><i class="ph ph-x"></i></button>
-        </header>
-        
-        <div class="confirmation-content text-center">
-            <div class="success-check pulse-anim">
-                <i class="ph-fill ph-check-circle"></i>
-            </div>
-            <p class="mt-2">Booking Confirmed!</p>
-            <h1 id="conf-code" class="conf-code-text">XIDMAT-2847</h1>
-            
-            <div class="provider-card glass-card mt-4">
-                <div class="provider-row">
-                    <img src="https://ui-avatars.com/api/?name=Ali+AC&background=1A56DB&color=fff" alt="Provider" class="avatar">
-                    <div class="provider-details">
-                        <h4>Ali AC Services</h4>
-                        <p><i class="ph-fill ph-star text-yellow"></i> 4.8 • 2.1 km away</p>
+        <div class="screen-scroll-wrap">
+            <header class="screen-header">
+                <button class="icon-btn" onclick="app.navigate('home-screen')"><i class="ph ph-x"></i></button>
+                <h2 class="screen-title">Booking Confirmed</h2>
+                <div></div>
+            </header>
+
+            <div class="confirmation-content">
+                <div class="success-animation">
+                    <div class="success-check pulse-anim">
+                        <i class="ph-fill ph-check-circle"></i>
                     </div>
-                    <button class="call-btn-sm"><i class="ph ph-phone"></i></button>
+                    <h2>Booking Confirmed!</h2>
+                    <p class="text-muted">Your service has been scheduled successfully.</p>
                 </div>
-                <div class="booking-meta mt-2">
-                    <p><i class="ph ph-calendar"></i> Tomorrow, 10:00 AM</p>
-                    <p><i class="ph ph-map-pin"></i> House 42, Street 1, G-13, Islamabad</p>
-                </div>
-            </div>
 
-            <div class="price-breakdown-card mt-4">
-                <h3>Price Breakdown</h3>
-                <div class="breakdown-list">
-                    <div class="breakdown-row"><span>Base Rate</span><span>PKR 1,200</span></div>
-                    <div class="breakdown-row"><span>Urgency Premium</span><span>PKR 0</span></div>
-                    <div class="breakdown-row"><span>Distance Charge</span><span>PKR 42</span></div>
-                    <div class="breakdown-row"><span>Peak Hour Factor</span><span>x1.0</span></div>
-                    <div class="breakdown-row"><span>Quality Premium</span><span>PKR 60</span></div>
-                    <div class="breakdown-row"><span>Experience Factor</span><span>PKR 120</span></div>
-                    <div class="breakdown-row border-top"><span><strong>Total Price</strong></span><span><strong>PKR 1,438</strong></span></div>
+                <div class="conf-code-card">
+                    <span class="conf-label">Booking Reference</span>
+                    <h1 id="conf-code" class="conf-code-text">XIDMAT-2847</h1>
                 </div>
-            </div>
 
-            <div class="confirmation-actions mt-4">
-                <button class="btn-primary" onclick="app.startTrackingSimulation()">Track Provider</button>
-                <button class="btn-text" onclick="app.navigate('home-screen')">Book Another Service</button>
+                <div class="provider-card glass-card">
+                    <div class="provider-row">
+                        <img src="https://ui-avatars.com/api/?name=Ali+AC&background=2563eb&color=fff&bold=true" alt="Provider" class="avatar">
+                        <div class="provider-details">
+                            <h4>Ali AC Services</h4>
+                            <p><i class="ph-fill ph-star text-yellow"></i> 4.8 • 2.1 km away</p>
+                        </div>
+                        <button class="call-btn-sm"><i class="ph ph-phone"></i></button>
+                    </div>
+                    <div class="booking-meta mt-2">
+                        <div class="meta-item"><i class="ph ph-calendar"></i> Tomorrow, 10:00 AM</div>
+                        <div class="meta-item"><i class="ph ph-map-pin"></i> House 42, Street 1, G-13, Islamabad</div>
+                    </div>
+                </div>
+
+                <div class="price-breakdown-card">
+                    <h3>Price Breakdown</h3>
+                    <div class="breakdown-list">
+                        <div class="breakdown-row"><span>Base Rate</span><span>PKR 1,200</span></div>
+                        <div class="breakdown-row"><span>Urgency Premium</span><span>PKR 0</span></div>
+                        <div class="breakdown-row"><span>Distance Charge</span><span>PKR 42</span></div>
+                        <div class="breakdown-row"><span>Peak Hour Factor</span><span>×1.0</span></div>
+                        <div class="breakdown-row"><span>Quality Premium</span><span>PKR 60</span></div>
+                        <div class="breakdown-row"><span>Experience Factor</span><span>PKR 120</span></div>
+                        <div class="breakdown-row total-row"><span><strong>Total</strong></span><span><strong>PKR 1,438</strong></span></div>
+                    </div>
+                </div>
+
+                <div class="confirmation-actions">
+                    <button class="btn-primary" onclick="app.startTrackingSimulation()">
+                        <i class="ph ph-map-pin"></i> Track Provider
+                    </button>
+                    <button class="btn-secondary" onclick="app.navigate('home-screen')">Book Another Service</button>
+                </div>
             </div>
         </div>
     </section>
 
-    <!-- ==================== TRACKING SCREEN (EN-ROUTE) ==================== -->
+    <!-- ==================== TRACKING SCREEN ==================== -->
     <section id="tracking-screen" class="view">
         <header class="tracking-header">
             <button class="icon-btn" onclick="app.navigate('home-screen')"><i class="ph ph-arrow-left"></i></button>
-            <h3>Service Tracking</h3>
+            <h2>Live Tracking</h2>
+            <div></div>
         </header>
         <div id="map" class="tracking-map-container"></div>
         <div class="tracking-info-card slide-up-anim">
             <div class="provider-strip">
-                <img src="https://ui-avatars.com/api/?name=Ali+AC&background=0A5C36&color=fff" alt="Provider" class="avatar">
+                <img src="https://ui-avatars.com/api/?name=Ali+AC&background=0A5C36&color=fff&bold=true" alt="Provider" class="avatar">
                 <div class="provider-meta">
                     <h4>Ali AC Services</h4>
                     <p><i class="ph-fill ph-star text-yellow"></i> 4.8 • AC Technician</p>
@@ -270,124 +372,128 @@
                 </div>
             </div>
             <div class="arrival-est">
-                <p>Estimated Arrival</p>
+                <p class="text-muted">Estimated Arrival</p>
                 <h2>10 Minutes</h2>
             </div>
             <p class="status-msg">Ustad is on the way to your location in G-13.</p>
         </div>
     </section>
 
-    <!-- ==================== COMPLETION & FEEDBACK SCREEN ==================== -->
+    <!-- ==================== FEEDBACK SCREEN ==================== -->
     <section id="feedback-screen" class="view">
-        <div class="feedback-container fade-up-anim">
-            <div class="success-icon pulse-anim">
-                <i class="ph-fill ph-check-circle"></i>
-            </div>
-            <h2>Service Completed!</h2>
-            <p>Aapki service kamyabi se mukammal ho gayi hai.</p>
-            
-            <div class="final-invoice glass-card">
-                <div class="invoice-row"><span>Final Price:</span><strong>PKR 1,438</strong></div>
-                <div class="invoice-row"><span>Payment:</span><strong>Cash</strong></div>
-            </div>
-
-            <h3 class="mt-4">How was the service?</h3>
-            <div class="star-rating">
-                <i class="ph ph-star" data-value="1"></i>
-                <i class="ph ph-star" data-value="2"></i>
-                <i class="ph ph-star" data-value="3"></i>
-                <i class="ph ph-star" data-value="4"></i>
-                <i class="ph ph-star" data-value="5"></i>
-            </div>
-
-            <div class="quality-checks mt-4">
-                <div class="check-item">
-                    <span>Arrived on time?</span>
-                    <input type="checkbox" id="check-time">
+        <div class="screen-scroll-wrap">
+            <div class="feedback-container fade-up-anim">
+                <div class="success-icon pulse-anim">
+                    <i class="ph-fill ph-check-circle"></i>
                 </div>
-                <div class="check-item">
-                    <span>Quality of work?</span>
-                    <input type="checkbox" id="check-quality" checked>
-                </div>
-                <div class="check-item">
-                    <span>Cleanliness?</span>
-                    <input type="checkbox" id="check-clean" checked>
-                </div>
-            </div>
+                <h2>Service Completed!</h2>
+                <p class="text-muted">Aapki service kamyabi se mukammal ho gayi hai.</p>
 
-            <textarea placeholder="Any comments? (Optional)" id="feedback-comment"></textarea>
-            
-            <button class="btn-primary ripple mt-4" onclick="app.submitFeedback()">Submit Review</button>
-            <button class="btn-text mt-2" onclick="app.showDisputeModal()">Raise a Dispute</button>
+                <div class="final-invoice glass-card">
+                    <div class="invoice-row"><span>Final Price:</span><strong>PKR 1,438</strong></div>
+                    <div class="invoice-row"><span>Payment:</span><strong>Cash on Delivery</strong></div>
+                </div>
+
+                <h3 class="mt-4">How was the service?</h3>
+                <div class="star-rating">
+                    <i class="ph ph-star" data-value="1"></i>
+                    <i class="ph ph-star" data-value="2"></i>
+                    <i class="ph ph-star" data-value="3"></i>
+                    <i class="ph ph-star" data-value="4"></i>
+                    <i class="ph ph-star" data-value="5"></i>
+                </div>
+
+                <div class="quality-checks mt-4">
+                    <div class="check-item">
+                        <span>Arrived on time?</span>
+                        <input type="checkbox" id="check-time">
+                    </div>
+                    <div class="check-item">
+                        <span>Quality of work?</span>
+                        <input type="checkbox" id="check-quality" checked>
+                    </div>
+                    <div class="check-item">
+                        <span>Cleanliness?</span>
+                        <input type="checkbox" id="check-clean" checked>
+                    </div>
+                </div>
+
+                <textarea placeholder="Any comments? (Optional)" id="feedback-comment"></textarea>
+
+                <button class="btn-primary ripple mt-4" onclick="app.submitFeedback()">Submit Review</button>
+                <button class="btn-text mt-2" onclick="app.showDisputeModal()">Raise a Dispute</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- ==================== AGENT TRACE SCREEN ==================== -->
+    <section id="trace-screen" class="view">
+        <div class="trace-header">
+            <div class="trace-title">
+                <i class="ph-fill ph-brain"></i>
+                <span>AI Reasoning Trace</span>
+            </div>
+            <button class="trace-close" onclick="app.navigate('chat-screen')">
+                <i class="ph ph-x"></i>
+            </button>
+        </div>
+        <div class="trace-content" id="trace-logs"></div>
+        <div class="trace-footer" id="trace-status">
+            <div class="spinner"></div>
+            <span>Munsif is thinking...</span>
         </div>
     </section>
 
     <!-- ==================== DISPUTE MODAL ==================== -->
     <div id="dispute-modal" class="modal">
+        <div class="modal-backdrop" onclick="app.hideDisputeModal()"></div>
         <div class="modal-content slide-up-anim">
-            <h3>Report an Issue</h3>
-            <p>Humain batayen ke kya masla pesh aya.</p>
-            
+            <div class="modal-header">
+                <h3>Report an Issue</h3>
+                <button class="icon-btn" onclick="app.hideDisputeModal()"><i class="ph ph-x"></i></button>
+            </div>
+            <p class="text-muted">Humain batayen ke kya masla pesh aya.</p>
+
             <select id="dispute-type">
-                <option value="poor_quality">Poor Quality</option>
+                <option value="poor_quality">Poor Quality Work</option>
                 <option value="no_show">Provider No-show</option>
                 <option value="overcharge">Overcharged</option>
                 <option value="damage">Property Damage</option>
             </select>
-            
+
             <textarea placeholder="Describe the issue in detail..." id="dispute-desc"></textarea>
-            
+
             <div class="modal-actions">
                 <button class="btn-secondary" onclick="app.hideDisputeModal()">Cancel</button>
                 <button class="btn-primary" onclick="app.submitDispute()">Submit Dispute</button>
             </div>
         </div>
     </div>
-    
+
     <!-- ==================== NOTIFICATION MODAL ==================== -->
     <div id="notification-modal" class="modal">
+        <div class="modal-backdrop" onclick="app.hideNotifications()"></div>
         <div class="modal-content slide-up-anim notification-modal">
             <div class="modal-header">
                 <h3>Notifications</h3>
                 <button class="icon-btn" onclick="app.hideNotifications()"><i class="ph ph-x"></i></button>
             </div>
-            <div class="notification-list" id="notification-list">
-                <!-- Notifications will be injected here -->
-            </div>
+            <div class="notification-list" id="notification-list"></div>
             <div class="modal-footer">
                 <button class="btn-text" onclick="app.markAllNotificationsRead()">Mark all as read</button>
             </div>
         </div>
     </div>
-    
-    <section id="trace-screen" class="view">
-        <div class="trace-header">
-            <div class="trace-title">
-                <i class="ph-fill ph-brain"></i>
-                <span>Agent Reasoning Trace</span>
-            </div>
-            <button class="trace-close" onclick="app.navigate('chat-screen')">
-                <i class="ph ph-x"></i>
-            </button>
-        </div>
-        <div class="trace-content" id="trace-logs">
-            <!-- Trace steps will be injected here -->
-        </div>
-        <div class="trace-footer" id="trace-status">
-            <div class="spinner"></div>
-            <span>Agents are thinking...</span>
-        </div>
-    </section>
 
     <!-- ==================== BOTTOM NAV BAR ==================== -->
-    <nav class="bottom-nav glass-card" id="bottom-nav">
+    <nav class="bottom-nav" id="bottom-nav">
         <a href="#" class="nav-item active" onclick="app.navigate('home-screen', this)">
             <i class="ph ph-house"></i>
             <span>Home</span>
         </a>
         <a href="#" class="nav-item" onclick="app.navigate('chat-screen', this)">
             <i class="ph ph-chat-teardrop-text"></i>
-            <span>Ask Munsif</span>
+            <span>Munsif AI</span>
         </a>
         <a href="#" class="nav-item" onclick="app.navigate('bookings-screen', this)">
             <i class="ph ph-calendar-check"></i>
@@ -402,61 +508,70 @@
     <!-- ==================== BOOKINGS SCREEN ==================== -->
     <section id="bookings-screen" class="view has-bottom-nav">
         <header class="app-header">
-            <div class="header-left">
-                <h1 class="app-title">My Bookings</h1>
+            <div class="header-brand">
+                <h1 class="screen-title">My Bookings</h1>
             </div>
-            <div class="header-right">
+            <div class="header-actions">
                 <button class="icon-btn" onclick="app.loadBookingsList()"><i class="ph ph-arrow-clockwise"></i></button>
             </div>
         </header>
         <main class="home-container">
-            <div class="booking-list" id="bookings-list-full">
-                <!-- Bookings will be injected here -->
-            </div>
+            <div class="booking-list" id="bookings-list-full"></div>
         </main>
     </section>
 
     <!-- ==================== PROFILE SCREEN ==================== -->
     <section id="profile-screen" class="view has-bottom-nav">
         <header class="app-header">
-            <div class="header-left">
-                <h1 class="app-title">Profile</h1>
+            <div class="header-brand">
+                <h1 class="screen-title">Profile</h1>
             </div>
         </header>
         <main class="home-container">
-            <div class="profile-card glass-card">
-                <div class="profile-header">
-                    <img src="https://ui-avatars.com/api/?name=User&background=1A56DB&color=fff" alt="Profile" class="profile-avatar" id="profile-avatar">
-                    <div class="profile-info">
-                        <h3 id="profile-name">User Name</h3>
-                        <p id="profile-email" class="text-muted">user@example.com</p>
-                    </div>
+            <div class="profile-hero glass-card">
+                <div class="profile-avatar-wrap">
+                    <img src="https://ui-avatars.com/api/?name=User&background=2563eb&color=fff&bold=true" alt="Profile" class="profile-avatar" id="profile-avatar">
+                    <div class="avatar-ring"></div>
                 </div>
-                <div class="profile-stats mt-4">
+                <div class="profile-info">
+                    <h3 id="profile-name">User Name</h3>
+                    <p id="profile-email" class="text-muted">user@example.com</p>
+                </div>
+                <div class="profile-stats">
                     <div class="profile-stat">
                         <span id="profile-bookings-count">0</span>
-                        <p>Total Bookings</p>
+                        <p>Bookings</p>
                     </div>
+                    <div class="profile-stat-divider"></div>
                     <div class="profile-stat">
                         <span id="profile-completed-count">0</span>
                         <p>Completed</p>
                     </div>
+                    <div class="profile-stat-divider"></div>
                     <div class="profile-stat">
                         <span id="profile-rating">0.0</span>
                         <p>Avg Rating</p>
                     </div>
                 </div>
             </div>
-            
-            <div class="profile-actions mt-4">
-                <button class="profile-action-btn" onclick="app.logout()">
-                    <i class="ph ph-sign-out"></i>
+
+            <div class="profile-section-title mt-4">Account Settings</div>
+            <div class="profile-actions">
+                <button class="profile-action-btn danger" onclick="app.logout()">
+                    <div class="action-icon-wrap danger"><i class="ph ph-sign-out"></i></div>
                     <span>Logout</span>
+                    <i class="ph ph-caret-right action-arrow"></i>
                 </button>
+            </div>
+
+            <div class="xidmat-brand-footer">
+                <span>XIDMAT<span class="ai-dot">.AI</span></span>
+                <p>Smart Services · Powered by AI</p>
             </div>
         </main>
     </section>
 
+    </div><!-- /.app-container -->
     <script src="app.js"></script>
 </body>
 </html>
