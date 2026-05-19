@@ -36,10 +36,19 @@ from backend.insaf.insaf_agent import InsafAgent  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
+# ── Load Google ADK Agent Definitions ──────────────────────────────────────────
+try:
+    from backend.adk_agents import root_agent, zuban_agent, khoji_agent, jadwal_agent, qeemat_agent, insaf_agent  # noqa: E402
+    _adk_agents_loaded = True
+    logger.info("Google ADK LlmAgent definitions loaded: Munsif → Zuban, Khoji, Jadwal, Qeemat, Insaf")
+except Exception as _adk_agent_err:
+    logger.warning(f"ADK agent definitions not loaded: {_adk_agent_err}")
+    _adk_agents_loaded = False
+
 # ── Instantiate agent classes ─────────────────────────────────────────────────
 try:
     zuban_instance = ZubanAgent()
-except EnvironmentError as e:
+except Exception as e:
     logger.warning(f"ZubanAgent not initialized: {e}")
     zuban_instance = None
 
@@ -82,12 +91,12 @@ async def run_zuban(session_id: str, text: str) -> Dict[str, Any]:
         return {"response": "Maazrat, samajh nahi aaya. Dobara likhein.", "intent": {}, "trace": trace}
 
 
-async def run_khoji(session_id: str, service_type: str, location: str, urgency: str) -> Dict[str, Any]:
+async def run_khoji(session_id: str, service_type: str, location: str, urgency: str, user_lat: float = None, user_lng: float = None) -> Dict[str, Any]:
     """Find and rank providers via Khoji."""
-    trace = [{"agent": "Khoji", "action": f"Searching for {service_type} in {location}"}]
+    trace = [{"agent": "Khoji", "action": f"Searching for {service_type} in {location} (user GPS: {user_lat}, {user_lng})"}]
     db = _get_db()
     try:
-        result = khoji_instance.find_providers(db, service_type, location, urgency)
+        result = khoji_instance.find_providers(db, service_type, location, urgency, user_lat=user_lat, user_lng=user_lng)
         trace.append({
             "agent": "Khoji",
             "action": f"Found {result.get('total_found', 0)} providers",
@@ -162,6 +171,7 @@ async def run_qeemat(session_id: str, provider_id: int, urgency: str, distance_k
             appointment_time=appt_time,
             provider_rating=provider.rating or 5.0,
             experience_years=provider.experience or 1,
+            provider_name=provider.name or "Provider",
         )
 
         trace.append({

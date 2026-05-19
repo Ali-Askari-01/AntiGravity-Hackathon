@@ -130,6 +130,8 @@ class SearchRequest(BaseModel):
     service_type: str
     location: str
     urgency: Optional[str] = "normal"
+    user_lat: Optional[float] = None
+    user_lng: Optional[float] = None
 
 class ScheduleRequest(BaseModel):
     session_id: Optional[str] = None
@@ -294,7 +296,7 @@ async def search_providers_endpoint(req: SearchRequest, db: Session = Depends(ge
         munsif.add_workplan_step(session_id, "System", f"Routing to Khoji for {req.service_type} in {req.location}")
 
     try:
-        adk_result = await adk.run_khoji(session_id, req.service_type, req.location, req.urgency)
+        adk_result = await adk.run_khoji(session_id, req.service_type, req.location, req.urgency, user_lat=req.user_lat, user_lng=req.user_lng)
         if req.session_id:
             _push_trace(req.session_id, adk_result.get("trace", []))
             

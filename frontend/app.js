@@ -8,7 +8,7 @@ const app = {
     currentScreen: 'auth-screen',
     
     // API Configuration
-    apiBase: '',
+    apiBase: window.location.hostname === 'localhost' ? '' : '',
     sessionId: null,
     authToken: null,
     currentUser: null,
@@ -21,6 +21,8 @@ const app = {
     userMarker: null,
     routeLine: null,
     ws: null,
+    _userGpsLat: null,
+    _userGpsLng: null,
 
     // Helper for API calls with auth token
     async callAPI(endpoint, method = 'POST', data = null) {
@@ -50,6 +52,21 @@ const app = {
     // Initialize the app
     init() {
         console.log("XIDMAT.AI App Initialized");
+        
+        // Capture user GPS location immediately
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    this._userGpsLat = position.coords.latitude;
+                    this._userGpsLng = position.coords.longitude;
+                    console.log(`GPS acquired: ${this._userGpsLat}, ${this._userGpsLng}`);
+                },
+                (error) => {
+                    console.warn("GPS error:", error.message);
+                },
+                { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 }
+            );
+        }
         
         // Check for stored auth token
         const storedToken = localStorage.getItem('authToken');
@@ -608,7 +625,9 @@ const app = {
                 session_id: this.sessionId,
                 service_type: intent.service_type,
                 location: intent.location,
-                urgency: intent.urgency
+                urgency: intent.urgency,
+                user_lat: this._userGpsLat,
+                user_lng: this._userGpsLng
             });
 
             if (res.status === 'success') {
@@ -1034,7 +1053,8 @@ const app = {
     connectTrackingWebSocket() {
         if (!this.currentBooking?.booking_id) return;
         
-        const wsUrl = `ws://127.0.0.1:8000/ws/tracking/${this.currentBooking.booking_id}`;
+        const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${wsProtocol}//${window.location.host}/ws/tracking/${this.currentBooking.booking_id}`;
         this.ws = new WebSocket(wsUrl);
         
         this.ws.onopen = () => {
@@ -1060,10 +1080,9 @@ const app = {
     },
 
     initMap() {
-        // Default to Karachi coords (city center)
-        const defaultLocation = { lat: 24.8607, lng: 67.0011 };
-        let userLocation = defaultLocation;
-        
+        const defaultLocation = { lat: 24.8862, lng: 67.0693 };
+        this._userLocation = defaultLocation;
+
         this.map = new google.maps.Map(document.getElementById("map"), {
             zoom: 12,
             center: defaultLocation,
@@ -1076,123 +1095,139 @@ const app = {
             fullscreenControl: true,
         });
 
-        // Try to get user's actual location
-        if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(
-                (position) => {
-                    userLocation = {
-                        lat: position.coords.latitude,
-                        lng: position.coords.longitude
-                    };
-                    this.userMarker.setPosition(userLocation);
-                    this.map.setCenter(userLocation);
-                    this.map.setZoom(14);
-                    this.updateProviderMarkerAndRoute(userLocation);
-                },
-                (error) => {
-                    console.warn("Geolocation error:", error);
-                    // Use default location if geolocation fails
-                    this.updateProviderMarkerAndRoute(userLocation);
-                },
-                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-            );
-        } else {
-            console.warn("Geolocation not supported");
-            this.updateProviderMarkerAndRoute(userLocation);
-        }
-
-        // Add User Marker with custom icon
-        const userIcon = {
-            path: google.maps.SymbolPath.CIRCLE,
-            fillColor: '#0E9F6E',
-            fillOpacity: 1,
-            strokeColor: '#ffffff',
-            strokeWeight: 2,
-            scale: 12
-        };
-        
         this.userMarker = new google.maps.Marker({
-            position: userLocation,
+            position: defaultLocation,
             map: this.map,
             title: "You are here",
-            icon: userIcon,
-            label: {
-                text: "You",
-                color: "#ffffff",
-                fontSize: "10px",
-                fontWeight: "bold"
-            }
+            icon: {
+                path: google.maps.SymbolPath.CIRCLE,
+                fillColor: '#0E9F6E',
+                fillOpacity: 1,
+                strokeColor: '#ffffff',
+                strokeWeight: 2,
+                scale: 12
+            },
+            label: { text: "You", color: "#ffffff", fontSize: "10px", fontWeight: "bold" }
         });
 
-        // Initialize provider marker and route
-        this.updateProviderMarkerAndRoute(userLocation);
-    },
-
-    updateProviderMarkerAndRoute(userLocation) {
-        // Get provider location from selected provider
-        let providerLocation = { 
-            lat: userLocation.lat + 0.02, 
-            lng: userLocation.lng + 0.02 
-        };
-        
-        if (this.selectedProvider) {
-            // Use provider's actual coordinates if available
-            providerLocation = {
-                lat: this.selectedProvider.lat || userLocation.lat + 0.02,
-                lng: this.selectedProvider.lng || userLocation.lng + 0.02
-            };
-        }
-        
-        // Add Provider Marker with custom icon
-        const providerIcon = {
-            path: google.maps.SymbolPath.CIRCLE,
-            fillColor: '#1A56DB',
-            fillOpacity: 1,
-            strokeColor: '#ffffff',
-            strokeWeight: 2,
-            scale: 12
-        };
-        
         this.providerMarker = new google.maps.Marker({
-            position: providerLocation,
+            position: defaultLocation,
             map: this.map,
-            title: this.selectedProvider?.name || "Provider",
-            icon: providerIcon,
-            label: {
-                text: "P",
-                color: "#ffffff",
-                fontSize: "12px",
-                fontWeight: "bold"
-            }
+            title: "Provider",
+            icon: {
+                path: google.maps.SymbolPath.CIRCLE,
+                fillColor: '#1A56DB',
+                fillOpacity: 1,
+                strokeColor: '#ffffff',
+                strokeWeight: 2,
+                scale: 12
+            },
+            label: { text: "P", color: "#ffffff", fontSize: "12px", fontWeight: "bold" }
         });
 
-        // Draw route line between user and provider
         this.routeLine = new google.maps.Polyline({
-            path: [userLocation, providerLocation],
+            path: [defaultLocation, defaultLocation],
             geodesic: true,
             strokeColor: '#1A56DB',
             strokeOpacity: 0.8,
             strokeWeight: 4,
             icons: [{
-                icon: {
-                    path: 'M 0,-1 0,1',
-                    strokeOpacity: 1,
-                    scale: 4
-                },
+                icon: { path: 'M 0,-1 0,1', strokeOpacity: 1, scale: 4 },
                 offset: '0',
                 repeat: '20px'
             }]
         });
         this.routeLine.setMap(this.map);
 
-        // Fit map to show both markers
-        const bounds = new google.maps.LatLngBounds();
-        bounds.extend(userLocation);
-        bounds.extend(providerLocation);
-        this.map.fitBounds(bounds, { top: 50, bottom: 50, left: 50, right: 50 });
-            
-        // Animate provider marker towards user (simulating movement)
-        this.animateProviderMovement(userLocation, providerLocation);
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    this._userLocation = {
+                        lat: position.coords.latitude,
+                        lng: position.coords.longitude
+                    };
+                    this.userMarker.setPosition(this._userLocation);
+                    this.map.setCenter(this._userLocation);
+                    this.map.setZoom(14);
+                    this._updateRoute();
+                },
+                () => { this._updateRoute(); },
+                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+            );
+        } else {
+            this._updateRoute();
+        }
+    },
+
+    _updateRoute() {
+        const userLocation = this._userLocation || { lat: 24.8862, lng: 67.0693 };
+        let providerLocation = {
+            lat: userLocation.lat + 0.02,
+            lng: userLocation.lng + 0.02
+        };
+
+        if (this.selectedProvider && this.selectedProvider.lat && this.selectedProvider.lng) {
+            providerLocation = {
+                lat: parseFloat(this.selectedProvider.lat),
+                lng: parseFloat(this.selectedProvider.lng)
+            };
+        }
+
+        this.providerMarker.setPosition(providerLocation);
+        this.providerMarker.setTitle(this.selectedProvider?.name || "Provider");
+
+        if (this._directionsRenderer) {
+            this._directionsRenderer.setMap(null);
+        }
+
+        if (typeof google.maps.DirectionsRenderer === 'undefined') {
+            this.routeLine.setPath([userLocation, providerLocation]);
+            this.routeLine.setMap(this.map);
+            const bounds = new google.maps.LatLngBounds();
+            bounds.extend(userLocation);
+            bounds.extend(providerLocation);
+            this.map.fitBounds(bounds, { top: 50, bottom: 50, left: 50, right: 50 });
+            this.animateProviderMovement(userLocation, providerLocation);
+            return;
+        }
+
+        this._directionsRenderer = new google.maps.DirectionsRenderer({
+            suppressMarkers: true,
+            polylineOptions: {
+                strokeColor: '#1A56DB',
+                strokeWeight: 5,
+                strokeOpacity: 0.8
+            }
+        });
+        this._directionsRenderer.setMap(this.map);
+        this.routeLine.setMap(null);
+
+        const directionsService = new google.maps.DirectionsService();
+        directionsService.route(
+            {
+                origin: userLocation,
+                destination: providerLocation,
+                travelMode: google.maps.TravelMode.DRIVING
+            },
+            (response, status) => {
+                if (status === 'OK') {
+                    this._directionsRenderer.setDirections(response);
+                } else {
+                    this.routeLine.setPath([userLocation, providerLocation]);
+                    this.routeLine.setMap(this.map);
+                }
+                const bounds = new google.maps.LatLngBounds();
+                bounds.extend(userLocation);
+                bounds.extend(providerLocation);
+                this.map.fitBounds(bounds, { top: 50, bottom: 50, left: 50, right: 50 });
+                this.animateProviderMovement(userLocation, providerLocation);
+            }
+        );
+    },
+
+    updateProviderMarkerAndRoute(userLocation) {
+        if (userLocation) this._userLocation = userLocation;
+        this._updateRoute();
     },
 
     animateProviderMovement(userLocation, providerLocation) {

@@ -1,8 +1,9 @@
 fastapi
-uvicorn
+uvicorn[standard]
 pydantic
 sqlalchemy
 google-genai
 google-adk
 python-dotenv
 requests
+httpx

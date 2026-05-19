@@ -1,19 +1,21 @@
+import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 
-# Use SQLite for the hackathon
-SQLALCHEMY_DATABASE_URL = "sqlite:///./antigravity.db"
-
-# connect_args={"check_same_thread": False} is needed for SQLite in FastAPI
-engine = create_engine(
-    SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
-)
+db_path = os.environ.get("DATABASE_URL", "")
+if db_path:
+    engine = create_engine(db_path, connect_args={"check_same_thread": False} if db_path.startswith("sqlite") else {})
+else:
+    db_dir = os.path.dirname(os.path.abspath(__file__))
+    db_parent = os.path.dirname(db_dir)
+    db_file = os.path.join(db_parent, "antigravity.db")
+    db_path = f"sqlite:///{db_file}"
+    engine = create_engine(db_path, connect_args={"check_same_thread": False})
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
 Base = declarative_base()
 
-# Dependency to get the DB session
+
 def get_db():
     db = SessionLocal()
     try:
