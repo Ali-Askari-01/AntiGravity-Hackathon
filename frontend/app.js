@@ -8,7 +8,13 @@ const app = {
     currentScreen: 'auth-screen',
     
     // API Configuration
-    apiBase: window.location.hostname === 'localhost' ? '' : '',
+    apiBase: (() => {
+        // If running in Capacitor, use the deployed backend URL
+        if (window.Capacitor || window.location.protocol === 'file:' || window.location.protocol === 'capacitor:') {
+            return 'https://web-production-ec021.up.railway.app';
+        }
+        return '';
+    })(),
     sessionId: null,
     authToken: null,
     currentUser: null,
@@ -37,6 +43,15 @@ const app = {
             if (data) options.body = JSON.stringify(data);
             
             const response = await fetch(`${this.apiBase}${endpoint}`, options);
+            
+            // Check if response is JSON before parsing
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                const text = await response.text();
+                console.error(`Non-JSON response from ${endpoint}:`, text.substring(0, 200));
+                throw new Error(`Server returned an invalid response. Please check your connection.`);
+            }
+            
             const result = await response.json();
             
             if (!response.ok) {
@@ -45,6 +60,9 @@ const app = {
             return result;
         } catch (error) {
             console.error(`API Error (${endpoint}):`, error);
+            if (error.name === 'TypeError' && error.message.includes('fetch')) {
+                throw new Error('Cannot connect to server. Please check your internet connection.');
+            }
             throw error;
         }
     },
@@ -1128,7 +1146,10 @@ const app = {
         if (!this.currentBooking?.booking_id) return;
         
         const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsUrl = `${wsProtocol}//${window.location.host}/ws/tracking/${this.currentBooking.booking_id}`;
+        const wsHost = (window.Capacitor || window.location.protocol === 'file:' || window.location.protocol === 'capacitor:')
+            ? 'web-production-ec021.up.railway.app'
+            : window.location.host;
+        const wsUrl = `${wsProtocol}//${wsHost}/ws/tracking/${this.currentBooking.booking_id}`;
         this.ws = new WebSocket(wsUrl);
         
         this.ws.onopen = () => {
