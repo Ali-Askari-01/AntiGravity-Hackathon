@@ -39,6 +39,23 @@ except Exception as _adk_err:
 @contextlib.asynccontextmanager
 async def lifespan(app: FastAPI):
     models.Base.metadata.create_all(bind=engine)
+    
+    # Auto-seed providers if the table is empty
+    try:
+        db = SessionLocal()
+        provider_count = db.query(models.Provider).count()
+        if provider_count == 0:
+            logger.info("No providers found, running seed...")
+            db.close()
+            from backend.seed_providers import seed_database
+            seed_database()
+            logger.info("Database seeded successfully")
+        else:
+            db.close()
+            logger.info(f"Database already has {provider_count} providers")
+    except Exception as e:
+        logger.warning(f"Auto-seed skipped: {e}")
+    
     yield
 
 app = FastAPI(title="Antigravity Agents API — Powered by Google ADK", lifespan=lifespan)
@@ -190,7 +207,16 @@ class TokenResponse(BaseModel):
 
 
 # ── Frontend dir (mounted at bottom of file after all routes) ─────────────────
-frontend_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend")
+_frontend_options = [
+    os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "frontend"),
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "frontend"),
+    "/app/frontend",
+]
+frontend_dir = _frontend_options[0]
+for p in _frontend_options:
+    if os.path.isdir(p) and os.path.exists(os.path.join(p, "index.html")):
+        frontend_dir = p
+        break
 
 
 # ── Helper: push ADK trace into our SQLite workplan ────────────────────────────

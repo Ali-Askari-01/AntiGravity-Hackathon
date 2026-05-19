@@ -7,7 +7,9 @@ from typing import Dict, Any, Optional
 from dotenv import load_dotenv
 from pathlib import Path
 
-load_dotenv(Path(__file__).parent / ".env")
+_env_file = Path(__file__).parent / ".env"
+load_dotenv(_env_file) if _env_file.exists() else None
+load_dotenv()
 
 from google.adk.agents import LlmAgent
 from google.adk.tools import FunctionTool

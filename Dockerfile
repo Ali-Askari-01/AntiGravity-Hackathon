@@ -2,13 +2,22 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-COPY backend/requirements.txt ./requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+# Install system deps
+RUN apt-get update && apt-get install -y --no-install-recommends gcc && rm -rf /var/lib/apt/lists/*
 
-COPY backend/ ./
-COPY frontend/ ./frontend/
+# Copy requirements first for caching
+COPY backend/requirements.txt /app/backend/requirements.txt
+RUN pip install --no-cache-dir -r /app/backend/requirements.txt
 
-RUN python seed_providers.py || true
+# Copy the entire project
+COPY . /app/
+
+# Create data directory for SQLite
+RUN mkdir -p /app/data
+
+# Seed the database at build time
+RUN cd /app && python -c "from backend.database import engine, Base; from backend import models; Base.metadata.create_all(bind=engine)" || true
+RUN cd /app && python backend/seed_providers.py || true
 
 EXPOSE 8000
 

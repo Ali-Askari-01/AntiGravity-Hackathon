@@ -4,9 +4,14 @@ import logging
 from pathlib import Path
 from typing import Optional, List
 
-from dotenv import load_dotenv
-
-load_dotenv(Path(__file__).parent / ".env")
+try:
+    from dotenv import load_dotenv
+    _env_path = Path(__file__).parent / ".env"
+    if _env_path.exists():
+        load_dotenv(_env_path)
+    load_dotenv()
+except ImportError:
+    pass
 
 logger = logging.getLogger(__name__)
 

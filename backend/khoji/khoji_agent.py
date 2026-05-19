@@ -9,7 +9,9 @@ from sqlalchemy.orm import Session
 from backend.models import Provider
 from dotenv import load_dotenv
 
-load_dotenv(Path(__file__).parent.parent / ".env")
+_env_file = Path(__file__).parent.parent / ".env"
+load_dotenv(_env_file) if _env_file.exists() else None
+load_dotenv()
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

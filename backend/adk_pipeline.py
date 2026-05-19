@@ -8,14 +8,13 @@ from pathlib import Path
 from typing import Any, Dict
 
 # ── Load environment variables FIRST, before any local imports ────────────────
-# This ensures API keys are set before agents try to read them at import time.
-_backend_dir = Path(__file__).parent
+_env_file = Path(__file__).parent / ".env"
 try:
     from dotenv import load_dotenv
-    load_dotenv(_backend_dir / ".env")
+    load_dotenv(_env_file) if _env_file.exists() else None
     load_dotenv()
 except ImportError:
-    pass  # dotenv not installed; rely on real environment variables
+    pass
 
 # ── Standard library / third-party ────────────────────────────────────────────
 try:

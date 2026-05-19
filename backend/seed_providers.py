@@ -2880,5 +2880,8 @@ def seed():
     finally:
         db.close()
 
-if __name__ == "__main__":
+def seed_database():
     seed()
+
+if __name__ == "__main__":
+    seed_database()

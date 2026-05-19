@@ -6,7 +6,9 @@ from pydantic import BaseModel, ValidationError
 from datetime import datetime
 from dotenv import load_dotenv
 
-load_dotenv(Path(__file__).parent.parent / ".env")
+_env_file = Path(__file__).parent.parent / ".env"
+load_dotenv(_env_file) if _env_file.exists() else None
+load_dotenv()
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
