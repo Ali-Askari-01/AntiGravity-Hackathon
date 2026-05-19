@@ -15,10 +15,7 @@ COPY . /app/
 # Create data directory for SQLite
 RUN mkdir -p /app/data
 
-# Seed the database at build time
-RUN cd /app && python -c "from backend.database import engine, Base; from backend import models; Base.metadata.create_all(bind=engine)" || true
-RUN cd /app && python backend/seed_providers.py || true
-
 EXPOSE 8000
 
-CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Use shell form to allow env var expansion
+CMD uvicorn backend.main:app --host 0.0.0.0 --port ${PORT:-8000}
