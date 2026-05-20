@@ -1,71 +1,222 @@
-# 🚀 Antigravity
+# XIDMAT.AI — AI-Powered Home Services Platform
 
-**Your Local Experts. Instantly.**
-
-Antigravity is a next-generation AI-powered service booking platform built for Pakistan. It abstracts away the complexity of finding, negotiating, and scheduling local service professionals (Plumbers, Electricians, Cleaners, etc.) by utilizing a fully autonomous **Multi-Agent Pipeline** powered by the **Google Agent Development Kit (ADK)**.
+> **Built for the Antigravity Hackathon** — A fully autonomous, multi-agent service booking platform for Pakistan, powered by the **Google Agent Development Kit (ADK)** and **Gemini 2.0 Flash**.
 
 ---
 
-## ✨ Features
+## Overview
 
-- **🔐 Secure Authentication:** Email/password login with token-based auth and 24-hour session expiry.
-- **🗣️ Multilingual NLP:** Talk in English, Urdu, or Roman Urdu ("Mere AC se pani tapak raha hai"). Our Intent Agent (Zuban) understands context and urgency.
-- **🤖 Autonomous Multi-Agent Orchestration:** 8 specialized AI agents handle the entire booking lifecycle autonomously—from matching and dynamic pricing to dispute resolution.
-- **📍 Real-time Tracking:** Live provider tracking with native Google Maps integration and WebSocket updates.
-- **⚡ Dynamic Pricing & Scheduling:** Fair, transparent pricing using 7 data points (distance, urgency, peak hours) and intelligent conflict-free scheduling.
-- ** Smart Intent Recognition:** AI-powered service detection from natural language prompts (e.g., "pani ki tanki leak" → Plumber, "bijli ka kaam" → Electrician).
-- **📊 Provider Ranking:** 6-factor scoring algorithm considering distance, rating, availability, experience, urgency, and trust score.
-- **🔔 Notifications:** Real-time notification system with unread badges and bulk mark-as-read.
-- **📈 User Analytics:** Personalized dashboard showing booking stats, completion rates, and average ratings.
-- ** Profile Management:** Dedicated profile screen with user stats and account management.
+XIDMAT.AI is a next-generation AI-powered platform that abstracts away the complexity of finding, negotiating, and scheduling local service professionals (Plumbers, Electricians, AC Technicians, Cleaners, etc.) in Pakistan. Users describe their problem in **English, Urdu, or Roman Urdu** — and our AI agents handle the entire booking lifecycle autonomously.
 
-## 🏗️ Architecture
+### Why Antigravity?
 
-Antigravity uses a robust pipeline of specialized ADK `LlmAgent`s orchestrated by a Master Agent.
-
-1. **Munsif (Orchestrator):** Manages the session state and delegates tasks sequentially.
-2. **Zuban (Intent):** Extracts service type, location, urgency, and language from natural language input.
-3. **Khoji (Matching):** Queries SQLite and applies a 6-factor algorithm to find the best provider.
-4. **Jadwal (Scheduling):** Checks provider calendars, prevents double-booking, and suggests alternatives.
-5. **Qeemat (Pricing):** Calculates transparent, dynamic pricing based on 7 components.
-6. **Meezan/Hukum (Booking):** Executes the booking and generates receipts.
-7. **Mayaar (Quality):** Manages post-service feedback loops.
-8. **Insaf (Dispute):** Handles user complaints and automatically penalizes providers if necessary.
-
-## ️ Tech Stack
-
-- **Frontend:** HTML, CSS (Vanilla Custom UI), JavaScript, Google Maps JS API.
-- **Backend:** Python, FastAPI, SQLite.
-- **AI/LLM Engine:** Google Agent Development Kit (ADK), Gemini 2.0 Flash.
-- **Database:** SQLite (Development), PostgreSQL (Production Ready).
+This project was built end-to-end using **Antigravity** as the development environment. Antigravity provided:
+- **AI-assisted code generation** for all backend agents, API routes, and frontend components
+- **Rapid prototyping** of the full multi-agent pipeline from intent extraction to dispute resolution
+- **One-command deployment** to Railway with Docker/Nixpacks configuration
+- **Automated APK builds** via GitHub Actions for the Capacitor-based mobile app
+- **Full-stack debugging** with integrated terminal, file explorer, and AI pair programming
 
 ---
 
-## 🚀 How to Run Locally (Windows)
+## Architecture
 
-We have provided a convenient batch script that automatically sets up the backend, installs dependencies, and serves the frontend.
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     XIDMAT.AI Architecture                       │
+─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  ┌──────────────┐    ┌──────────────┐    ┌──────────────────┐   │
+│  │  Mobile App  │    │  Web Frontend │    │  Desktop Sidebar │   │
+│  │  (Capacitor) │    │  (HTML/JS)    │    │                  │   │
+│  └──────┬───────┘    └──────┬───────    └────────┬─────────┘   │
+│         │                   │                      │             │
+│         └───────────────────┼──────────────────────┘             │
+│                             │                                    │
+│                    ┌────────▼────────┐                           │
+│                    │   FastAPI       │                           │
+│                    │   Backend       │                           │
+│                    │   (Python)      │                           │
+│                    └────────┬────────┘                           │
+│                             │                                    │
+│              ┌──────────────┼──────────────┐                     │
+│              │              │              │                     │
+│     ┌────────▼────┐ ┌──────▼──────┐ ┌─────▼──────             │
+│     │ Munsif      │ │ Google ADK  │ │ SQLite /   │             │
+│     │ Orchestrator│ │ LlmAgents   │ │ PostgreSQL │             │
+│     └─────────────┘ └─────────────┘ └────────────┘             │
+│                                                                  │
+│  ┌────────────────────────────────────────────────────────────┐ │
+│  │              Agent Pipeline (Google ADK)                    │ │
+│  │                                                            │ │
+│  │  Munsif (Root) → Zuban ─→ Khoji → Jadwal ─→ Qeemat      │ │
+│  │                       │                           │         │ │
+│  │                       └──────────────→ Insaf ←────┘         │ │
+│  └────────────────────────────────────────────────────────────┘ │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Deployment Stack
+
+| Layer | Technology | Hosting |
+|-------|-----------|---------|
+| **Backend API** | FastAPI + Google ADK + Python 3.12 | Railway (Docker) |
+| **Mobile App** | Capacitor.js (WebView wrapper) | Android APK |
+| **Web Frontend** | Vanilla HTML/CSS/JS (SPA pattern) | Served by FastAPI |
+| **Database** | SQLite (dev) / PostgreSQL (prod) | Railway managed |
+| **AI/LLM** | Google Gemini 2.0 Flash via ADK | Google Cloud |
+| **Maps** | Google Maps JS API + Geocoding | Google Cloud |
+| **CI/CD** | GitHub Actions (auto APK build) | GitHub |
+
+---
+
+## Agents Developed (Google ADK)
+
+All agents are implemented as **Google ADK `LlmAgent`** instances with custom `FunctionTool` integrations. The pipeline is orchestrated by a root agent with sub-agent delegation.
+
+### Agent 0: Munsif (Master Orchestrator)
+- **Role:** Root ADK agent that coordinates all specialist agents
+- **Model:** Gemini 2.0 Flash via `google.adk.agents.LlmAgent`
+- **Sub-agents:** Zuban, Khoji, Jadwal, Qeemat, Insaf
+- **Tools:** search_providers, check_availability, calculate_price, resolve_dispute
+- **Responsibility:** Maintains session state, routes tasks sequentially, handles fallbacks
+
+### Agent 1: Zuban (Multilingual Intent Extraction)
+- **Role:** Parses user input in English, Urdu, or Roman Urdu
+- **Output:** Structured intent JSON (service_type, location, urgency, language_detected)
+- **Mapping:** 11 service categories (electrician, plumber, ac_technician, carpenter, painter, home_cleaner, mechanic, gas_technician, pest_control, tiler, welder)
+- **Fallback:** Generates clarifying questions when confidence is low
+
+### Agent 2: Khoji (AI Provider Matching)
+- **Role:** Finds and ranks providers using a 6-factor scoring algorithm
+- **Factors:** Distance (Haversine), rating, experience, availability, urgency match, trust score
+- **Tool:** `search_providers` — queries SQLite provider database with geocoding
+- **Output:** Ranked provider list with AI-generated rationale for each recommendation
+
+### Agent 3: Jadwal (Scheduling Intelligence)
+- **Role:** Checks provider calendar for conflicts and suggests alternatives
+- **Features:** Double-booking prevention, buffer time enforcement, next-available-slot finder
+- **Tool:** `check_availability` — validates time slots against existing bookings
+
+### Agent 4: Qeemat (Dynamic Pricing Engine)
+- **Role:** Calculates transparent pricing using 7 components
+- **Components:** Base rate, urgency premium, distance charge, peak hour factor, quality premium, experience bonus, demand surge
+- **Tool:** `calculate_price` — returns structured breakdown with AI rationale
+
+### Agent 5: Meezan (Booking Execution)
+- **Role:** Creates confirmed bookings, generates unique confirmation codes, writes to database
+- **Features:** Price integration from Qeemat, session linking, notification triggers
+
+### Agent 6: Mayaar (Quality Assurance)
+- **Role:** Post-service feedback loop — collects ratings, updates provider scores
+- **Features:** Weighted rolling average, multi-criteria feedback (on-time, quality, cleanliness)
+
+### Agent 7: Insaf (Dispute Resolution)
+- **Role:** Handles user complaints with AI-powered analysis
+- **Dispute Types:** No-show, overcharge, poor quality, property damage
+- **Actions:** Refund processing, provider penalties, escalation to management
+
+### Agent 8: Bonus (Provider Optimization)
+- **Role:** Provider-side workload balancing and demand forecasting
+- **Features:** Time slot optimization, capacity management, demand prediction
+
+---
+
+## APIs Used
+
+### Real APIs
+| API | Purpose | Provider |
+|-----|---------|----------|
+| **Google ADK** | Multi-agent orchestration framework | Google |
+| **Gemini 2.0 Flash** | LLM inference for all agents | Google Cloud |
+| **Google Maps JS API** | Live tracking, geocoding, route rendering | Google Cloud |
+| **Google Geocoding API** | Convert area names to lat/lng coordinates | Google Cloud |
+| **Railway** | Cloud hosting with PostgreSQL & Docker | Railway.app |
+
+### Mock/Simulated APIs
+| API | Purpose | Notes |
+|-----|---------|-------|
+| **WebSocket Tracking** | Real-time provider location updates | Simulated movement on map |
+| **UI Avatars** | Provider profile images | `ui-avatars.com` |
+| **Phosphor Icons** | UI icon library | `unpkg.com/@phosphor-icons` |
+
+---
+
+## Integrations Implemented
+
+### 1. Google ADK Multi-Agent Pipeline
+- Full `LlmAgent` hierarchy with root agent (`Munsif`) and 5 sub-agents
+- `FunctionTool` wrappers for database operations (search, schedule, price, dispute)
+- Session management with workplan trace logging
+- Async-compatible agent runners in `adk_pipeline.py`
+
+### 2. Capacitor.js Mobile App
+- WebView-based Android app wrapping the web frontend
+- GPS location permissions (`ACCESS_FINE_LOCATION`, `ACCESS_COARSE_LOCATION`)
+- Native bridge for geolocation via `navigator.geolocation`
+- GitHub Actions CI/CD for automated APK builds
+
+### 3. Railway Cloud Deployment
+- Docker-based deployment with `python:3.12-slim` base image
+- Nixpacks fallback configuration
+- Environment variable management (`.env` for API keys)
+- Health check endpoint (`/health`) with ADK availability status
+
+### 4. SQLite + SQLAlchemy ORM
+- 8 database models: User, Session, Provider, Booking, Schedule, Feedback, Dispute, Notification
+- Auto-seeding of 20+ mock providers across Karachi neighborhoods
+- User-scoped data isolation (bookings, notifications, analytics)
+
+### 5. Token-Based Authentication
+- Bearer token auth with 24-hour expiry
+- Password hashing via SHA-256
+- User registration, login, logout, and profile management
+- Protected endpoints with `Depends(get_current_user)`
+
+### 6. Real-Time WebSocket Tracking
+- WebSocket endpoint (`/ws/tracking/{booking_id}`) for live provider location
+- Google Maps integration with animated provider movement
+- Route line rendering between user and provider
+
+### 7. Rate Limiting Middleware
+- 100 requests/minute per IP address
+- Sliding window implementation
+- Returns `429 Too Many Requests` on limit exceeded
+
+---
+
+## Tech Stack
+
+| Category | Technology |
+|----------|-----------|
+| **Frontend** | HTML5, CSS3 (Custom Glass UI), Vanilla JavaScript, Google Maps JS API |
+| **Backend** | Python 3.12, FastAPI, Uvicorn, Pydantic |
+| **AI/ML** | Google ADK, Gemini 2.0 Flash, google-genai |
+| **Database** | SQLite (dev), PostgreSQL (prod), SQLAlchemy ORM |
+| **Mobile** | Capacitor.js v8, Android (Java/Kotlin bridge) |
+| **DevOps** | Docker, Railway, GitHub Actions, Nixpacks |
+| **Icons/UI** | Phosphor Icons, Google Fonts (Inter, Outfit) |
+
+---
+
+## How to Run Locally
 
 ### Prerequisites
 - Python 3.9+
-- An `.env` file in the `backend/` directory with the following keys:
+- Node.js 22+
+- `.env` file in `backend/` with API keys:
   ```env
-  GEMINI_API_KEY=your_key_here
-  GOOGLE_MAPS_API_KEY=your_key_here
-  OPENROUTER_API_KEY=your_key_here
+  GEMINI_API_KEY=your_gemini_key
+  GOOGLE_MAPS_API_KEY=your_maps_key
+  OPENROUTER_API_KEY=your_openrouter_key
+  OPENROUTER_MODEL=google/gemini-2.0-flash-001
   ```
 
-### Quick Start
-1. Clone the repository.
-2. Double-click the `run_windows.bat` file in the root directory.
-3. The script will automatically:
-    - Create a virtual environment (`venv`).
-    - Install Python dependencies from `backend/requirements.txt`.
-    - Start the FastAPI backend on `http://127.0.0.1:8000`.
-    - Open your default web browser to the frontend interface.
-
-### Manual Start (Alternative)
-**Terminal 1 (Backend):**
+### Quick Start (Windows)
 ```bash
+# Double-click run_windows.bat
+# Or run manually:
 cd backend
 python -m venv venv
 venv\Scripts\activate
@@ -73,55 +224,50 @@ pip install -r requirements.txt
 uvicorn main:app --reload
 ```
 
-**Terminal 2 (Frontend):**
-Open `frontend/index.html` in your browser or use a live server extension in VSCode.
+Then open `frontend/index.html` in your browser.
 
----
-
-## 💾 Database Seeding
-The project comes with a pre-populated SQLite database (`antigravity.db`) containing mock service providers across Karachi areas (DHA, Gulshan, Clifton, Malir, Nazimabad, etc.) with precise coordinates and their schedules. To re-seed or wipe the database, run:
+### Mobile App Build
 ```bash
-cd backend
-python seed_providers.py
+npm install
+npx cap sync android
+# Open in Android Studio or use GitHub Actions for automated APK build
 ```
 
 ---
 
-## 📋 API Endpoints
+## API Endpoints
 
 ### Authentication
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/auth/register` | Register new user (name, email, password) |
-| POST | `/auth/login` | Login with email and password |
-| GET | `/auth/me` | Get current user info (requires auth token) |
+| POST | `/auth/register` | Register new user |
+| POST | `/auth/login` | Login with phone and password |
+| GET | `/auth/me` | Get current user info |
 | POST | `/auth/logout` | Logout and invalidate token |
 
 ### Core Booking Flow
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | POST | `/chat` | Send message to Zuban intent agent |
-| POST | `/search` | Find providers by service type and location |
-| POST | `/check_schedule` | Check provider availability |
-| POST | `/pricing` | Calculate dynamic pricing |
-| POST | `/book` | Create a new booking |
-| POST | `/track` | Update booking status (EN_ROUTE/ARRIVED/COMPLETED) |
-| POST | `/bookings/{id}/cancel` | Cancel a booking |
+| POST | `/search` | Find providers via Khoji |
+| POST | `/check_schedule` | Check availability via Jadwal |
+| POST | `/pricing` | Calculate price via Qeemat |
+| POST | `/book` | Create booking via Meezan |
+| POST | `/track` | Update booking status |
 
 ### User Data (Authenticated)
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/bookings` | List user's bookings (user-scoped) |
-| GET | `/analytics/stats` | Get user's booking analytics |
-| GET | `/notifications` | Get user's notifications |
-| POST | `/notifications/mark-all-read` | Mark all notifications as read |
-| POST | `/notifications/{id}/read` | Mark single notification as read |
+| GET | `/bookings` | List user's bookings |
+| GET | `/analytics/stats` | User booking analytics |
+| GET | `/notifications` | User notifications |
+| POST | `/notifications/mark-all-read` | Mark all as read |
 
 ### Feedback & Disputes
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | POST | `/feedback` | Submit service feedback |
-| POST | `/dispute` | Raise a dispute |
+| POST | `/dispute` | Raise dispute via Insaf |
 
 ### Utilities
 | Method | Endpoint | Description |
@@ -129,13 +275,13 @@ python seed_providers.py
 | GET | `/health` | Health check with ADK status |
 | GET | `/providers` | List all providers |
 | GET | `/trace/{session_id}` | Get agent workplan trace |
-| GET | `/booking/{id}` | Get single booking details |
+| WS | `/ws/tracking/{booking_id}` | Real-time tracking WebSocket |
 
 ---
 
-## 🗺️ Supported Locations
+## Supported Locations
 
-Currently optimized for **Karachi, Pakistan** with providers in:
+Optimized for **Karachi, Pakistan** with providers across:
 - Gulshan-e-Iqbal, DHA, Clifton, PECHS
 - North Nazimabad, Federal B. Area, Johar
 - Korangi, Saddar, Lyari, Orangi Town
@@ -143,39 +289,42 @@ Currently optimized for **Karachi, Pakistan** with providers in:
 
 ---
 
-## 🔒 Security & Privacy
+## Project Structure
 
-- **Token-Based Auth:** Bearer tokens with 24-hour expiry, stored securely in localStorage.
-- **User-Scoped Data:** All bookings, notifications, and analytics are filtered by authenticated user.
-- **XSS Protection:** Provider cards use event listeners instead of inline JavaScript.
-- **Input Validation:** All API endpoints validate request schemas with Pydantic.
-- **Rate Limiting:** 100 requests/minute per IP to prevent abuse.
+```
+antigravity-hackathon/
+├── backend/
+│   ├── main.py              # FastAPI app, all routes, auth, WebSocket
+│   ├── adk_agents.py        # Google ADK LlmAgent definitions
+│   ├── adk_pipeline.py      # Async agent runners
+│   ├── database.py          # SQLAlchemy engine & session
+│   ├── models.py            # 8 database models
+│   ├── seed_providers.py    # Mock provider data seeder
+│   ├── requirements.txt     # Python dependencies
+│   ├── munsif/              # Orchestrator agent
+│   ├── zuban/               # Intent extraction agent
+│   ├── khoji/               # Provider matching agent
+│   ├── jadwal/              # Scheduling agent
+│   ├── qeemat/              # Pricing agent
+│   ├── meezan/              # Booking execution agent
+│   ├── insaf/               # Dispute resolution agent
+│   ├── mayaar/              # Quality assurance agent
+│   └── bonus/               # Provider optimization agent
+├── frontend/
+│   ├── index.html           # Main HTML (all screens)
+│   ├── app.js               # SPA router, API calls, UI logic
+│   └── styles.css           # Custom glass-morphism UI
+├── android/                  # Capacitor Android project
+├── .github/workflows/        # GitHub Actions APK build
+├── Dockerfile                # Railway Docker deployment
+├── nixpacks.toml             # Railway Nixpacks fallback
+├── railway.toml              # Railway deployment config
+├── capacitor.config.json     # Capacitor mobile config
+└── run_windows.bat           # Windows quick-start script
+```
 
 ---
 
-## 📝 Recent Updates
+## License
 
-### Major Improvements
-- ✅ **Email/Password Authentication:** Replaced phone-based auth with email/password login and registration.
-- ✅ **User-Scoped Endpoints:** Bookings, notifications, and analytics now return only authenticated user's data.
-- ✅ **Auth Token Extraction:** Backend now properly reads `Authorization: Bearer <token>` header.
-- ✅ **Profile Screen:** New dedicated profile page with user stats, avatar, and logout.
-- ✅ **Bookings Screen:** Full bookings list view with refresh capability.
-- ✅ **Cancel Booking:** New endpoint to cancel pending/confirmed bookings.
-- ✅ **Bulk Mark Read:** `/notifications/mark-all-read` endpoint for clearing all notifications.
-- ✅ **Peak Hour Pricing:** Booking flow now detects peak hours (9-11 AM, 5-8 PM) and applies dynamic pricing.
-- ✅ **User-Booking Link:** Bookings are now associated with `user_id` for proper ownership tracking.
-- ✅ **Loading States:** Auth forms, booking confirmation, and chat input now show loading indicators.
-- ✅ **XSS Fix:** Provider selection uses safe event listeners instead of inline `onclick`.
-- ✅ **Null Safety:** Feedback and dispute submission now validate booking existence.
-- ✅ **Booking Status Default:** Model now defaults to `"pending"` status.
-- ✅ **Chat Screen Cleanup:** Mock bubbles cleared on entry, welcome message shown dynamically.
-- ✅ **Dispute Fix:** Fixed `create_session()` call that was passing unsupported `prefix` argument.
-
-### Previous Updates
-- ✅ Fixed intent recognition for plumbing/electrical services
-- ✅ Added Malir area electricians to database
-- ✅ Fixed booking flow and price breakdown parsing
-- ✅ Improved location matching with Google Maps Geocoding API
-- ✅ Enhanced fallback keyword matching for Roman Urdu inputs
-- ✅ Added skill similarity matching for unknown service types
+Built for the **Antigravity Hackathon 2026**.
